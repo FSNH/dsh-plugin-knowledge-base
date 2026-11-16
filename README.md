@@ -106,6 +106,35 @@ embedding:
 
 向量检索的 KEY 走环境变量 `DSH_KB_EMBEDDING_KEY`，不写进配置文件。开启后索引时会把片段、检索时会把查询发给你配置的端点。
 
+### 开启向量检索（可选）
+
+关键词检索开箱即用。想让"意思相近但用词不同"也能命中（比如搜"报关资料"能命中写着"清关单据"的段落），再接一个 **OpenAI 兼容的 embeddings 接口**。
+
+> ⚠️ DeepSeek 官方**没有** embeddings 接口，所以要接别家的，或在本机跑 Ollama。
+
+改 `embedding` 这四项，然后**重载插件**（插件页关掉再打开，或重启 DSH）：
+
+```yaml
+embedding:
+  enabled: true
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # 服务根地址，不带 /embeddings
+  model: 'text-embedding-v3'
+  apiKey: ''            # 也可以留空，改用环境变量 DSH_KB_EMBEDDING_KEY
+```
+
+几个可直接抄的：
+
+| 服务 | baseUrl | model |
+|---|---|---|
+| 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `text-embedding-v3` |
+| 硅基流动 | `https://api.siliconflow.cn/v1` | `BAAI/bge-m3` |
+| OpenAI | `https://api.openai.com/v1` | `text-embedding-3-small` |
+| 本机 Ollama | `http://127.0.0.1:11434/v1` | `nomic-embed-text`（key 随便填） |
+
+改完还要在设置里点一次「**重建全部索引**」——已有文档没有向量，不重建就只有新导入的文档带向量。设置页会显示当前状态（已启用 / 缺字段 / 未启用）。
+
+配置错了不会卡住：接口不可用或返回异常时，索引阶段只写关键词索引、检索阶段自动退回关键词模式，不会报错也不会丢结果。
+
 ## 数据与隐私
 
 ```
@@ -149,8 +178,11 @@ $DSH_HOME/kb/
 $env:ELECTRON_RUN_AS_NODE=1
 & "<DeepSeek Harness.exe>" test/smoke.mjs
 
-# Client：模块注册 / 插槽 / 各种状态渲染 / 树展开 / 缩略图 / 大屏
+# Client：模块注册 / 插槽 / 各种状态渲染 / 树展开 / 缩略图 / 大屏 / 设置
 & "<DeepSeek Harness.exe>" test/client-smoke.mjs
+
+# 向量检索链路：自带一个假 embeddings 服务，验证写入向量 + hybrid 检索 + 接口挂了降级
+& "<DeepSeek Harness.exe>" test/vector.mjs
 ```
 
 仓库里**不含任何真实文档**，docx / xlsx 解析用例默认跳过。想覆盖真实文件解析，指一个你自己的样例：
