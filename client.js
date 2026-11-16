@@ -223,6 +223,9 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+		/** 行操作下拉菜单的宽度（与 .dsh-kb-menu 的 width 保持一致） */
+		const MENU_WIDTH = 184;
+
 		let searchSeq = 0;
 		async function runSearch(query) {
 			const text = String(query ?? '').trim();
@@ -480,12 +483,19 @@ window.__ModuleLoader__.load({
 							'aria-expanded': current.menu?.id === node.id,
 							onClick: (event) => {
 								event?.stopPropagation?.();
-								const rect = event?.currentTarget?.getBoundingClientRect?.();
+								// 贴着这一行的左边缘往下展开，别越过树栏压到阅读区
+								const target = event?.currentTarget;
+								const rowElement = target?.closest?.('.dsh-kb-row') || target;
+								const rect = rowElement?.getBoundingClientRect?.();
+								const menuWidth = MENU_WIDTH;
+								const viewportWidth = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1280;
+								let x = rect ? Math.round(rect.left + 10) : 24;
+								if (x + menuWidth > viewportWidth - 8) x = Math.max(8, viewportWidth - menuWidth - 8);
 								patch({
 									menu: current.menu?.id === node.id ? null : {
 										id: node.id,
-										x: rect ? Math.max(8, Math.round(rect.right - 170)) : 40,
-										y: rect ? Math.round(rect.bottom + 4) : 40,
+										x,
+										y: rect ? Math.round(rect.bottom + 2) : 40,
 									},
 								});
 							},
@@ -1577,7 +1587,7 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-moreBtn{font-size:15px;line-height:1;letter-spacing:1px;padding-bottom:3px;}',
 				'.dsh-kb-rowBtn--on{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);}',
 				'.dsh-kb-menuBackdrop{position:fixed;inset:0;z-index:40;}',
-				'.dsh-kb-menu{position:fixed;z-index:41;min-width:172px;padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 10px 28px rgba(0,0,0,.3);display:flex;flex-direction:column;}',
+				'.dsh-kb-menu{position:fixed;z-index:41;width:184px;padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 10px 28px rgba(0,0,0,.3);display:flex;flex-direction:column;}',
 				'.dsh-kb-menuItem{display:flex;align-items:center;height:30px;padding:0 10px;border:none;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;text-align:left;cursor:pointer;}',
 				'.dsh-kb-menuItem:hover{background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-menuItem--danger{color:var(--dsw-alias-label-danger,#d14343);}',
