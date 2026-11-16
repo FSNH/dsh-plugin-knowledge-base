@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // dsh-plugin-knowledge-base — Client 半部
 //
 // 三个挂载点：
@@ -483,20 +483,21 @@ window.__ModuleLoader__.load({
 							'aria-expanded': current.menu?.id === node.id,
 							onClick: (event) => {
 								event?.stopPropagation?.();
-								// 贴着这一行的左边缘往下展开，别越过树栏压到阅读区
+								// 菜单从文件树右侧弹出（不压住树里的文字），纵向对齐到这一行
 								const target = event?.currentTarget;
 								const rowElement = target?.closest?.('.dsh-kb-row') || target;
-								const rect = rowElement?.getBoundingClientRect?.();
-								const menuWidth = MENU_WIDTH;
+								const rowRect = rowElement?.getBoundingClientRect?.();
+								const sideRect = rowElement?.closest?.('.dsh-kb-side')?.getBoundingClientRect?.();
 								const viewportWidth = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1280;
-								let x = rect ? Math.round(rect.left + 10) : 24;
-								if (x + menuWidth > viewportWidth - 8) x = Math.max(8, viewportWidth - menuWidth - 8);
+								const viewportHeight = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 800;
+								const menuHeight = (isFolder ? 5 : 4) * 30 + 10;
+								let x = sideRect ? Math.round(sideRect.right + 6)
+									: rowRect ? Math.round(rowRect.right + 6) : 260;
+								if (x + MENU_WIDTH > viewportWidth - 8) x = Math.max(8, viewportWidth - MENU_WIDTH - 8);
+								let y = rowRect ? Math.round(rowRect.bottom + 2) : 40;
+								y = Math.max(8, Math.min(y, viewportHeight - menuHeight - 8));
 								patch({
-									menu: current.menu?.id === node.id ? null : {
-										id: node.id,
-										x,
-										y: rect ? Math.round(rect.bottom + 2) : 40,
-									},
+									menu: current.menu?.id === node.id ? null : { id: node.id, x, y },
 								});
 							},
 						}, '⋯'))),
