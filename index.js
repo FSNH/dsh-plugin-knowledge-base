@@ -17,6 +17,7 @@ import { createEmbedder, createIndex } from './lib/index.mjs';
 import { createPipeline } from './lib/pipeline.mjs';
 import { createPreviewer } from './lib/preview.mjs';
 import { createKnowledgeBaseTools } from './lib/tools.mjs';
+import { createSettingsStore } from './lib/settings.mjs';
 import { createRoutes } from './lib/routes.mjs';
 
 export const name = 'dsh-knowledge-base';
@@ -46,11 +47,15 @@ export function apply(ctx, config = {}) {
 		return;
 	}
 
-	const embedder = createEmbedder({
-		config: config.embedding,
-		logger,
-		apiKey: config.embedding?.apiKey,
-	});
+	// 向量配置：界面改的写进 settings.json，优先级高于插件 YAML 里的 config.embedding
+	const settings = createSettingsStore({ root, logger });
+	const resolveEmbedding = () => {
+		if (settings.hasSaved()) return settings.embedding();
+		const base = config.embedding ?? {};
+		return { enabled: Boolean(base.enabled), baseUrl: base.baseUrl ?? '', model: base.model ?? '', apiKey: base.apiKey ?? '' };
+	};
+
+	const embedder = createEmbedder({ resolve: resolveEmbedding, logger });
 	const index = createIndex({ store, embedder });
 	// Office 原版式预览要用宿主的 officeKit（LibreOffice 转换），它可能比本插件晚加载，
 	// 所以用 getter 在调用时取。
@@ -61,7 +66,7 @@ export function apply(ctx, config = {}) {
 	// 二进制预览（<img>/<iframe>）带不了自定义头，给它一条带启动令牌的通道。
 	const token = crypto.randomUUID();
 	const { routes } = createRoutes({
-		store, index, pipeline, embedder, config, logger, webServer, token, previewer,
+		store, index, pipeline, embedder, settings, config, logger, webServer, token, previewer,
 	});
 	for (const route of routes) {
 		ctx.effect(() => webServer.register(route), `knowledge-base: ${route.path}`);

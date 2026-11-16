@@ -1135,9 +1135,65 @@ window.__ModuleLoader__.load({
 		// ── 设置分区 ────────────────────────────────────────────────────────
 		function SettingsSection() {
 			const current = useStore();
+			const [form, setForm] = React.useState(null);
+			const [saving, setSaving] = React.useState(false);
+			const [probing, setProbing] = React.useState(false);
+			const [probe, setProbe] = React.useState(null);
+			const [formNotice, setFormNotice] = React.useState('');
 			React.useEffect(() => {
 				if (!state.loaded) loadState();
+				let cancelled = false;
+				api('/settings')
+					.then((data) => { if (!cancelled) setForm({ ...data.embedding, apiKey: '' }); })
+					.catch(() => { if (!cancelled) setForm({ enabled: false, baseUrl: '', model: '', apiKey: '', hasKey: false, keyTail: '' }); });
+				return () => { cancelled = true; };
 			}, []);
+
+			const saveEmbedding = async () => {
+				if (!form || saving) return;
+				setSaving(true);
+				setFormNotice('');
+				try {
+					const data = await api('/settings', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({
+							embedding: {
+								enabled: Boolean(form.enabled),
+								baseUrl: form.baseUrl,
+								model: form.model,
+								apiKey: form.apiKey,
+							},
+						}),
+					});
+					setForm({ ...data.embedding, apiKey: '' });
+					setFormNotice('已保存，立即生效');
+					await loadState(state.kbId, true);
+				} catch (error) {
+					setFormNotice(`保存失败：${error.message || error}`);
+				} finally {
+					setSaving(false);
+				}
+			};
+
+			const testEmbedding = async () => {
+				if (!form || probing) return;
+				setProbing(true);
+				setProbe(null);
+				try {
+					const data = await api('/embedding-test', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ baseUrl: form.baseUrl, model: form.model, apiKey: form.apiKey }),
+					});
+					setProbe(data.probe || { ok: false, error: '没有返回结果' });
+				} catch (error) {
+					setProbe({ ok: false, error: error.message || String(error) });
+				} finally {
+					setProbing(false);
+				}
+			};
+
 			const stats = current.stats;
 			const embedding = current.caps?.embedding;
 			return h('div', { className: 'dsh-kb-settings' },
@@ -1189,13 +1245,65 @@ window.__ModuleLoader__.load({
 							},
 						}, '清理预览缓存'))),
 				h('section', { className: 'dsh-kb-card' },
-					h('h4', null, '向量检索'),
-					embedding
-						? h('p', { className: 'dsh-kb-hint' },
-							embedding.enabled ? `已启用（模型 ${embedding.model}）：检索时会与关键词结果融合。`
-								: embedding.configured ? '已开启但缺少 baseUrl 或 model，当前仍只做关键词检索。'
-									: '未启用。关键词检索已经可用；需要语义检索时，在插件配置里填 OpenAI 兼容的 embeddings 接口。')
-						: h('p', { className: 'dsh-kb-hint' }, '未启用。')),
+					h('h4', null, '向量检索（可选）'),
+					h('p', { className: 'dsh-kb-hint' },
+						'关键词检索已经可用。想让「意思相近但用词不同」也能命中，接一个 OpenAI 兼容的 embeddings 接口 —— DeepSeek 官方没有这个接口，可以接百炼 / 硅基流动 / Ollama。'),
+					form
+						? h('div', { className: 'dsh-kb-form' },
+							h('label', { className: 'dsh-kb-check' },
+								h('input', {
+									type: 'checkbox',
+									checked: Boolean(form.enabled),
+									onChange: (event) => setForm({ ...form, enabled: event.target.checked }),
+								}),
+								'启用向量检索'),
+							h('label', { className: 'dsh-kb-field' },
+								h('span', { className: 'dsh-kb-label' }, '接口地址'),
+								h('input', {
+									type: 'text',
+									value: form.baseUrl || '',
+									placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+									onChange: (event) => setForm({ ...form, baseUrl: event.target.value }),
+								}),
+								h('span', { className: 'dsh-kb-hint' }, '填到 /v1 为止，不要带 /embeddings')),
+							h('label', { className: 'dsh-kb-field' },
+								h('span', { className: 'dsh-kb-label' }, '模型'),
+								h('input', {
+									type: 'text',
+									value: form.model || '',
+									placeholder: 'text-embedding-v3',
+									onChange: (event) => setForm({ ...form, model: event.target.value }),
+								})),
+							h('label', { className: 'dsh-kb-field' },
+								h('span', { className: 'dsh-kb-label' }, 'API Key'),
+								h('input', {
+									type: 'password',
+									value: form.apiKey || '',
+									placeholder: form.hasKey ? `已保存（尾号 ${form.keyTail}），留空表示不改` : '接口不需要鉴权就留空',
+									onChange: (event) => setForm({ ...form, apiKey: event.target.value }),
+								}),
+								h('span', { className: 'dsh-kb-hint' }, '只存在本机 ~/.dsh/kb/settings.json，不会写进插件配置')),
+							h('div', { className: 'dsh-kb-row2' },
+								h('button', {
+									type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+									onClick: saveEmbedding, disabled: saving,
+								}, saving ? '保存中…' : '保存'),
+								h('button', {
+									type: 'button', className: 'dsh-kb-btn',
+									onClick: testEmbedding, disabled: probing,
+								}, probing ? '测试中…' : '测试连接')),
+							probe
+								? h('div', { className: cx('dsh-kb-banner', probe.ok ? 'dsh-kb-banner--ok' : 'dsh-kb-banner--bad'), role: 'status' },
+									probe.ok ? `连接成功：返回 ${probe.dim} 维向量（${probe.model}）` : `连接失败：${probe.error}`)
+								: null,
+							formNotice ? h('p', { className: 'dsh-kb-hint' }, formNotice) : null,
+							form.enabled && (stats?.vectors || 0) === 0 && embedding?.enabled
+								? h('p', { className: 'dsh-kb-hint' }, '已启用，但现有文档还没有向量 —— 点上面「重建全部索引」补上（只补新增文档不算）。')
+								: null)
+						: h('p', { className: 'dsh-kb-hint' }, '读取配置中…'),
+					embedding?.enabled
+						? h('p', { className: 'dsh-kb-hint' }, `当前状态：已启用 · 模型 ${embedding.model} · 检索时与关键词结果融合（RRF）`)
+						: null),
 				current.error
 					? h('p', { className: 'dsh-kb-banner dsh-kb-banner--bad', role: 'alert' }, current.error)
 					: null,
@@ -1333,6 +1441,14 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-kv{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:6px 12px;font-size:12px;color:var(--dsw-alias-label-secondary);align-items:center;}',
 				'.dsh-kb-kv strong{color:var(--dsw-alias-label-primary);font-weight:600;}',
 				'.dsh-kb-row2{display:flex;gap:8px;}',
+				'.dsh-kb-form{display:flex;flex-direction:column;gap:10px;}',
+				'.dsh-kb-check{display:flex;align-items:center;gap:7px;font-size:12.5px;cursor:pointer;}',
+				'.dsh-kb-check input{width:14px;height:14px;margin:0;}',
+				'.dsh-kb-field{display:flex;flex-direction:column;gap:4px;}',
+				'.dsh-kb-label{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-form input[type=text],.dsh-kb-form input[type=password]{box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:12.5px;}',
+				'.dsh-kb-form input:focus{outline:none;border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-banner--ok{background:rgba(34,160,90,.12);color:#228a4e;}',
 				'.dsh-kb-barIcon--active{opacity:1;color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-rowActions{display:none;gap:2px;flex:none;}',
 				'.dsh-kb-row:hover .dsh-kb-rowActions,.dsh-kb-row:focus-visible .dsh-kb-rowActions{display:inline-flex;}',

@@ -112,28 +112,33 @@ embedding:
 
 > ⚠️ DeepSeek 官方**没有** embeddings 接口，所以要接别家的，或在本机跑 Ollama。
 
-改 `embedding` 这四项，然后**重载插件**（插件页关掉再打开，或重启 DSH）：
+**界面上直接填，不用改配置、不用重启：**
 
-```yaml
-embedding:
-  enabled: true
-  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # 服务根地址，不带 /embeddings
-  model: 'text-embedding-v3'
-  apiKey: ''            # 也可以留空，改用环境变量 DSH_KB_EMBEDDING_KEY
-```
+> 知识库页面 → 右上角**齿轮** → 「向量检索」卡片 → 勾选启用，填接口地址 / 模型 / API Key → **测试连接** → **保存** → 点「重建全部索引」
 
-几个可直接抄的：
-
-| 服务 | baseUrl | model |
+| 服务 | 接口地址（填到 /v1 为止） | 模型 |
 |---|---|---|
 | 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `text-embedding-v3` |
 | 硅基流动 | `https://api.siliconflow.cn/v1` | `BAAI/bge-m3` |
 | OpenAI | `https://api.openai.com/v1` | `text-embedding-3-small` |
 | 本机 Ollama | `http://127.0.0.1:11434/v1` | `nomic-embed-text`（key 随便填） |
 
-改完还要在设置里点一次「**重建全部索引**」——已有文档没有向量，不重建就只有新导入的文档带向量。设置页会显示当前状态（已启用 / 缺字段 / 未启用）。
+几点说明：
 
-配置错了不会卡住：接口不可用或返回异常时，索引阶段只写关键词索引、检索阶段自动退回关键词模式，不会报错也不会丢结果。
+- 保存在 `$DSH_HOME/kb/settings.json`（权限 0600），**API Key 不会写进插件配置**，界面上只回显尾号；
+- 保存即时生效，不用重载插件；「测试连接」会真发一次请求，成功会显示返回的向量维度；
+- 必须点一次「**重建全部索引**」——已有文档没有向量，不重建就只有新导入的文档带向量；
+- 配置错了不会卡住：接口不可用或返回异常时，索引阶段只写关键词、检索阶段自动退回关键词模式。
+
+也可以用 YAML 配（`config.embedding`），但**界面里保存过的值优先级更高**：
+
+```yaml
+embedding:
+  enabled: true
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+  model: 'text-embedding-v3'
+  apiKey: ''            # 也可以留空，改用环境变量 DSH_KB_EMBEDDING_KEY
+```
 
 ## 数据与隐私
 
