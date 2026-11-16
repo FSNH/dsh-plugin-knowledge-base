@@ -419,14 +419,15 @@ console.log('\n[7] 行操作菜单（⋯ 下拉）');
 	const items = page.filter((node) => String(node.props?.className).includes('dsh-kb-menuItem')).map((node) => [].concat(node.props.children).join(''));
 	check('文件夹菜单有 5 项', items.length === 5, JSON.stringify(items));
 	check('文件夹菜单含「新建子文件夹」', items.includes('新建子文件夹'), JSON.stringify(items));
-	check('文件夹菜单含「导入文件到这里」', items.includes('导入文件到这里'), JSON.stringify(items));
+	check('文件夹菜单含「上传文件到这里」', items.includes('上传文件到这里'), JSON.stringify(items));
 
 	// 文档行的菜单少两项
 	internals.patch({ menu: { id: 'd9', x: 20, y: 20 } });
 	page = renderPage();
 	const docItems = page.filter((node) => String(node.props?.className).includes('dsh-kb-menuItem')).map((node) => [].concat(node.props.children).join(''));
-	check('文档菜单 3 项', docItems.length === 3, JSON.stringify(docItems));
-	check('文档菜单不含导入', !docItems.includes('导入文件到这里'), JSON.stringify(docItems));
+	check('文档菜单 4 项', docItems.length === 4, JSON.stringify(docItems));
+	check('文档菜单也有上传', docItems.includes('上传文件到所在文件夹'), JSON.stringify(docItems));
+	check('文档菜单不含新建子文件夹', !docItems.includes('新建子文件夹'), JSON.stringify(docItems));
 
 	// 点遮罩关闭
 	internals.patch({ menu: { id: 'f1', x: 20, y: 20 } });
@@ -439,9 +440,16 @@ console.log('\n[7] 行操作菜单（⋯ 下拉）');
 	// 「导入文件到这里」会把目标目录记下来
 	internals.patch({ menu: { id: 'f1', x: 20, y: 20 } });
 	page = renderPage();
-	const importItem = page.find((node) => String(node.props?.className).includes('dsh-kb-menuItem') && [].concat(node.props?.children || []).join('') === '导入文件到这里');
+	const importItem = page.find((node) => String(node.props?.className).includes('dsh-kb-menuItem') && [].concat(node.props?.children || []).join('') === '上传文件到这里');
 	importItem.props.onClick();
-	check('导入目标设为该文件夹', internals.state.importTarget === 'f1', String(internals.state.importTarget));
+	check('文件夹的上传目标是自己', internals.state.importTarget === 'f1', String(internals.state.importTarget));
+
+	// 文件行的上传目标 = 它所在的文件夹
+	internals.patch({ menu: { id: 'd9', x: 20, y: 20 }, importTarget: null });
+	page = renderPage();
+	const docUpload = page.find((node) => String(node.props?.className).includes('dsh-kb-menuItem') && [].concat(node.props?.children || []).join('') === '上传文件到所在文件夹');
+	docUpload.props.onClick();
+	check('文件行的上传目标是父文件夹', internals.state.importTarget === 'f1', String(internals.state.importTarget));
 	internals.patch({ menu: null, importTarget: null });
 }
 

@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // dsh-plugin-knowledge-base — Client 半部
 //
 // 三个挂载点：
@@ -507,7 +507,7 @@ window.__ModuleLoader__.load({
 								key: `${node.id}-empty`,
 								className: 'dsh-kb-rowHint',
 								style: { paddingLeft: 6 + (depth + 1) * 14 },
-							}, '（空文件夹：把文件拖进来，或用这一行右边的「⋯」新建子文件夹 / 导入文件）'))
+							}, '（空文件夹：把文件拖进来，或用这一行右边的「⋯」新建子文件夹 / 上传文件）'))
 						: null);
 			});
 		}
@@ -640,7 +640,7 @@ window.__ModuleLoader__.load({
 				}
 				return h('div', { className: 'dsh-kb-empty' },
 					h('div', { className: 'dsh-kb-emptyIcon' }, h(Icon, { name: 'book', size: 28 })),
-					h('p', null, current.nodes.length ? '从左边选一个文件，或把文件拖进来。' : '这个知识库还是空的。点「导入文件」或把文件拖进来。'),
+					h('p', null, current.nodes.length ? '从左边选一个文件，或把文件拖进来。' : '这个知识库还是空的。点「上传文件」或把文件拖进来。'),
 					h('p', { className: 'dsh-kb-hint' }, '文件只存在这台电脑上，不会上传到云端。'));
 			}
 			const failed = doc.status === 'failed';
@@ -1150,7 +1150,7 @@ window.__ModuleLoader__.load({
 				onDrop: (event) => {
 					event.preventDefault();
 					setDragging(false);
-					if (!event.dataTransfer?.files?.length) return; // 树内拖动节点，不是导入文件
+					if (!event.dataTransfer?.files?.length) return; // 树内拖动节点，不是外部文件
 					uploadFiles(event.dataTransfer.files, currentFolderId(current));
 				},
 			},
@@ -1220,11 +1220,11 @@ window.__ModuleLoader__.load({
 						type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 						onClick: () => fileInput.current?.click(),
 						disabled: !current.kbId,
-					}, h(Icon, { name: 'upload', size: 14 }), current.uploading ? `上传中 ${current.uploading}` : '导入文件'),
+					}, h(Icon, { name: 'upload', size: 14 }), current.uploading ? `上传中 ${current.uploading}` : '上传文件'),
 					h('input', {
 						ref: fileInput, type: 'file', multiple: true, style: { display: 'none' },
 						onChange: (event) => {
-							// 从文件夹行的「⋯ → 导入文件」进来时，落在那个文件夹里
+							// 从行菜单的「⋯ → 上传文件」进来时，落在对应文件夹里
 							uploadFiles(event.target.files, state.importTarget || currentFolderId(current));
 							event.target.value = '';
 							patch({ importTarget: null });
@@ -1261,7 +1261,7 @@ window.__ModuleLoader__.load({
 								: h('div', { className: 'dsh-kb-tree' },
 									h(TreeRows, { byParent: tree, parentKey: '', depth: 0 }),
 									current.nodes.length === 0
-										? h('div', { className: 'dsh-kb-hint dsh-kb-hint--pad' }, '空知识库：导入文件，或新建文件夹。')
+										? h('div', { className: 'dsh-kb-hint dsh-kb-hint--pad' }, '空知识库：上传文件，或新建文件夹。')
 										: null))
 					: null, // 收起时不再画左侧竖条：顶部的箭头按钮就是展开入口
 				h('div', { className: 'dsh-kb-main' },
@@ -1306,12 +1306,11 @@ window.__ModuleLoader__.load({
 							kbId: node.kbId, parentId: node.id, kind: 'folder', name,
 						})))
 						: null,
-					isFolder
-						? item('导入文件到这里', () => {
-							patch({ importTarget: node.id });
-							fileInput.current?.click();
-						})
-						: null,
+					// 文件夹传到自己这儿；文件传到它所在的文件夹 —— 任何一行都能上传
+					item(isFolder ? '上传文件到这里' : '上传文件到所在文件夹', () => {
+						patch({ importTarget: isFolder ? node.id : (node.parentId || null) });
+						fileInput.current?.click();
+					}),
 					item('重命名', () => askText('重命名', node.name, (name) => nodeAction('rename', { id: node.id, name }))),
 					item('移动到…', () => askMove(node)),
 					item('删除', () => askConfirm(
