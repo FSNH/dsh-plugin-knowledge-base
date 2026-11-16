@@ -1,4 +1,4 @@
-﻿# DSH 个人知识库插件
+# DSH 个人知识库插件
 
 把本地文件整理成树状知识库，在 DeepSeek Harness 里直接读、直接搜，AI 也能检索并针对某一篇文档对话。
 
@@ -53,6 +53,73 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 
 > 依赖：`pdfjs-dist`（PDF 文字层抽取）。第一次装需要联网安装依赖。
 > Office 原版式预览依赖 DSH 自带的 LibreOffice（`officeKit`）：没有它也能用，只是 Office 文档只能看抽取出来的文字。
+
+### 从 npm 安装（发布之后）
+
+装好并发布到 npm 之后，一行命令即可（和你装 `dsh-better-sidebar` 一样）：
+
+```powershell
+dsh plugin --profile web add @fsnh/dsh-plugin-knowledge-base@0.1.0
+```
+
+`dsh plugin add` 做三件事：用 pnpm 把包装进 profile、把包名追加到 `dsh.profile.bundles`、profile 启动时合并包内自带的 `cordis.patch.yml`。**不需要手改任何 profile 文件**。
+
+## 打包与发布
+
+插件本身就是一个标准的 DSH bundle：`package.json` 里 `dsh.bundle.patch` 指向自带的 `cordis.patch.yml`，`dsh.client` 声明浏览器半部。
+
+### 1. 本地打包自测（不需要发布）
+
+```powershell
+npm pack                     # 产出 dsh-plugin-knowledge-base-0.1.0.tgz（25 个文件，约 94 KB）
+dsh plugin --profile kbtest add .\dsh-plugin-knowledge-base-0.1.0.tgz
+```
+
+装完打开 `~/.dsh/profiles/kbtest/package.json`，应该能看到：
+
+```json
+"dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "dsh-plugin-knowledge-base"] } }
+```
+
+> ⚠️ **名字已被占用**：npm 上的 `dsh-plugin-knowledge-base` 是别人的包（2026-08-19，作者 zhengjialux）。发布前必须换名，改完 `package.json` 的 `name` **同时**要改 `cordis.patch.yml` 里那一行的 `name`：
+>
+> ```powershell
+> npm pkg set name="@fsnh/dsh-plugin-knowledge-base"
+> ```
+>
+> 已验证可用的备选名：`@fsnh/dsh-plugin-knowledge-base`、`dsh-plugin-kb`、`dsh-local-kb`。
+
+### 2. 发布
+
+```powershell
+npm login
+npm publish --access public      # 作用域包（@xxx/yyy）必须带 --access public
+```
+
+发布后任何人：
+
+```powershell
+dsh plugin --profile web add @fsnh/dsh-plugin-knowledge-base@0.1.0
+```
+
+### 3. 自动发布（可选）
+
+仓库里带了 [`.github/workflows/publish.yml`](.github/workflows/publish.yml)：在 GitHub 的仓库设置里加一个 `NPM_TOKEN` secret（npm 的 Automation token），然后
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+就会自动校验「tag 与 package.json 版本一致」→ `npm publish --provenance`。
+
+### 发布前检查清单
+
+- [ ] `package.json`：`name` 没被占用、`version` 已递增、`private` 不为 `true`、没有重复的 `dependencies` 键
+- [ ] `files` 覆盖运行时需要的东西（`index.js` / `client.js` / `lib` / `cordis.patch.yml` / `icon.svg` / `locale`）
+- [ ] `cordis.patch.yml` 里的 `name` 与包名一致
+- [ ] `npm pack --dry-run` 看到 25 个文件、没有把 `node_modules` 或数据文件打进去
+- [ ] `node test/no-secrets.mjs` 通过（别把 API Key 打进包）
 
 ## 使用
 

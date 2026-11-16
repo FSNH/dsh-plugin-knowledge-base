@@ -1,7 +1,6 @@
 {
   "name": "dsh-plugin-knowledge-base",
   "version": "0.1.0",
-  "private": true,
   "description": "个人知识库：树状目录、文件上传与在线查看、全文检索（含 PDF 与中文），AI 可通过工具检索并针对文档对话。",
   "type": "module",
   "main": "./index.js",
@@ -29,11 +28,28 @@
     "rag",
     "full-text-search"
   ],
-  "dependencies": {
-    "pdfjs-dist": "4.10.38"
-  },
+  "author": "FSNH",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FSNH/dsh-plugin-knowledge-base.git"
+  },
+  "homepage": "https://github.com/FSNH/dsh-plugin-knowledge-base#readme",
+  "bugs": {
+    "url": "https://github.com/FSNH/dsh-plugin-knowledge-base/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
+  },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -45,8 +61,5 @@
         "@deepseek-ai/dsh-client-ui-sidebar"
       ]
     }
-  },
-  "dependencies": {
-    "pdfjs-dist": "^4.10.38"
   }
 }

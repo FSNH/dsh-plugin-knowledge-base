@@ -24,3 +24,6 @@ credentials.json
 *.key
 *.pem
 id_rsa*
+
+# npm pack 产物
+*.tgz

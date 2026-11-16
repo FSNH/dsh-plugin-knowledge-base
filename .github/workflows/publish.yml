@@ -1,0 +1,43 @@
+name: publish
+
+# 打一个 v 开头的 tag 就发布到 npm：
+#   git tag v0.1.0 && git push origin v0.1.0
+# 需要在仓库 Settings → Secrets 里放一个 NPM_TOKEN（npm 的 Automation token）。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 校验 tag 与 package.json 版本一致
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          echo "tag=$tag version=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "tag 与 package.json 的 version 不一致，先改版本号再打 tag" >&2
+            exit 1
+          fi
+
+      - name: 打一次包看看内容（避免发布空包）
+        run: npm pack --dry-run
+
+      - name: 发布
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
