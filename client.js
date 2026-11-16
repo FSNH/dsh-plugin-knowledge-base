@@ -1253,10 +1253,7 @@ window.__ModuleLoader__.load({
 									current.nodes.length === 0
 										? h('div', { className: 'dsh-kb-hint dsh-kb-hint--pad' }, '空知识库：导入文件，或新建文件夹。')
 										: null))
-					: h('button', {
-						type: 'button', className: 'dsh-kb-rail', title: '展开文件树',
-						onClick: () => patch({ sideOpen: true }),
-					}, h(Icon, { name: 'chevron', size: 14 })),
+					: null, // 收起时不再画左侧竖条：顶部的箭头按钮就是展开入口
 				h('div', { className: 'dsh-kb-main' },
 					current.showSettings
 						? h('div', { className: 'dsh-kb-settingsPane' },
@@ -1537,8 +1534,6 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-bannerClose{margin-left:auto;border:none;background:transparent;color:inherit;cursor:pointer;display:inline-flex;}',
 				'.dsh-kb-body{display:flex;flex:1;min-height:0;}',
 				'.dsh-kb-side{width:250px;flex:none;border-right:1px solid var(--dsw-alias-border-l1);overflow-y:auto;padding:6px 0 20px;}',
-				'.dsh-kb-rail{flex:none;width:26px;padding:0;border:none;border-right:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;}',
-				'.dsh-kb-rail:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);}',
 				'.dsh-kb-rot180{transform:rotate(180deg);}',
 				'.dsh-kb-tree{display:flex;flex-direction:column;}',
 				'.dsh-kb-row{display:flex;align-items:center;gap:5px;height:28px;padding-right:8px;cursor:pointer;color:var(--dsw-alias-label-primary);border-radius:6px;margin:0 6px;}',

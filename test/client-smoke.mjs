@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // Client 半部的"能不能渲染出来"冒烟测试（不依赖浏览器）。
 //
 // 目的：在没有浏览器控制通道的情况下，至少证明
@@ -365,10 +365,11 @@ toggle.props.onClick();
 check('点收起后 sideOpen=false', internals.state.sideOpen === false);
 treeCollapsed = renderPage();
 check('收起后树栏消失', !treeCollapsed.some((node) => String(node.props?.className).includes('dsh-kb-side')));
-const rail = treeCollapsed.find((node) => String(node.props?.className).includes('dsh-kb-rail'));
-check('收起后左侧有展开条', Boolean(rail));
-rail.props.onClick();
-check('点展开条后 sideOpen=true', internals.state.sideOpen === true);
+check('收起后没有左侧竖条（只靠顶部按钮）', !treeCollapsed.some((node) => String(node.props?.className).includes('dsh-kb-rail')));
+const expandToggle = treeCollapsed.find((node) => node.type === 'button' && node.props?.['aria-expanded'] === false);
+check('顶部按钮变成展开态', Boolean(expandToggle));
+expandToggle.props.onClick();
+check('点顶部按钮后 sideOpen=true', internals.state.sideOpen === true);
 
 console.log('\n[7] 面板内「知识库设置」');
 internals.patch({ showSettings: false, sideOpen: true, selectedId: '', doc: null });
