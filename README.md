@@ -59,7 +59,7 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 装好并发布到 npm 之后，一行命令即可（和你装 `dsh-better-sidebar` 一样）：
 
 ```powershell
-dsh plugin --profile web add @fsnh/dsh-plugin-knowledge-base@0.1.0
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 ```
 
 `dsh plugin add` 做三件事：用 pnpm 把包装进 profile、把包名追加到 `dsh.profile.bundles`、profile 启动时合并包内自带的 `cordis.patch.yml`。**不需要手改任何 profile 文件**。
@@ -71,17 +71,17 @@ dsh plugin --profile web add @fsnh/dsh-plugin-knowledge-base@0.1.0
 ### 1. 本地打包自测（不需要发布）
 
 ```powershell
-npm pack                     # 产出 fsnh-dsh-plugin-knowledge-base-0.1.0.tgz（25 个文件，约 95 KB）
-dsh plugin --profile kbtest add .\fsnh-dsh-plugin-knowledge-base-0.1.0.tgz
+npm pack                     # 产出 xiaofanzhao-dsh-plugin-knowledge-base-0.1.0.tgz（25 个文件，约 95 KB）
+dsh plugin --profile kbtest add .\xiaofanzhao-dsh-plugin-knowledge-base-0.1.0.tgz
 ```
 
 装完打开 `~/.dsh/profiles/kbtest/package.json`，应该能看到包名被自动追加进 bundles：
 
 ```json
-"dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@fsnh/dsh-plugin-knowledge-base"] } }
+"dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@xiaofanzhao/dsh-plugin-knowledge-base"] } }
 ```
 
-> **为什么包名带 `@fsnh/` 前缀**：npm 上的 `dsh-plugin-knowledge-base` 已经被别人的包占用（2026-08-19，作者 zhengjialux），所以发布名用作用域版本。
+> **为什么包名带 `@xiaofanzhao/` 前缀**：npm 上的 `dsh-plugin-knowledge-base` 已经被别人的包占用（2026-08-19，作者 zhengjialux），所以发布名用作用域版本。
 > 仓库名仍叫 `dsh-plugin-knowledge-base`，两者不冲突；包名以 `package.json` 的 `name` 为准，并且 **`cordis.patch.yml` 里那一行的 `name` 必须与它完全一致**，否则 profile 合并 patch 时找不到包。
 
 ### 2. 发布
@@ -94,7 +94,7 @@ npm publish --access public      # 作用域包（@xxx/yyy）必须带 --access 
 发布后任何人：
 
 ```powershell
-dsh plugin --profile web add @fsnh/dsh-plugin-knowledge-base@0.1.0
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 ```
 
 ### 3. 自动发布（可选）
