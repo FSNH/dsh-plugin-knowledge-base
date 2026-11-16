@@ -129,6 +129,10 @@ window.__ModuleLoader__.load({
 			bigMode: 'single',
 			sideOpen: true,
 			showSettings: false,
+			dashOpen: false,
+			dashData: null,
+			dashError: '',
+			dashLoading: false,
 		};
 
 		const listeners = new Set();
@@ -198,6 +202,7 @@ window.__ModuleLoader__.load({
 					selectedId: nodeId,
 					view: 'doc',
 					showSettings: false,
+					dashOpen: false,
 					doc: data.node,
 					docText: appending ? `${state.docText}\n\n${data.text}` : data.text,
 					docNext: data.end,
@@ -939,6 +944,130 @@ window.__ModuleLoader__.load({
 									office ? '正在渲染页面…' : '这个格式没有大屏预览，可以点「下载」用系统应用打开')));
 		}
 
+		// ── 看板：知识库规模 + 检索情况 ─────────────────────────────────────
+		function Dashboard() {
+			const current = useStore();
+			const data = current.dashData;
+			const error = current.dashError;
+			const loading = Boolean(current.dashLoading);
+
+			const load = async () => {
+				patch({ dashLoading: true });
+				try {
+					const result = await api('/dashboard');
+					patch({ dashData: result, dashError: '' });
+				} catch (problem) {
+					patch({ dashError: problem.message || '读取统计失败' });
+				} finally {
+					patch({ dashLoading: false });
+				}
+			};
+
+			React.useEffect(() => { if (!state.dashData) load(); }, []);
+
+			if (error && !data) {
+				return h('div', { className: 'dsh-kb-dash' },
+					h('div', { className: 'dsh-kb-banner dsh-kb-banner--bad', role: 'alert' }, error),
+					h('button', { type: 'button', className: 'dsh-kb-btn', onClick: load }, '重试'));
+			}
+			if (!data) return h('div', { className: 'dsh-kb-hint dsh-kb-hint--pad' }, loading ? '统计中…' : '');
+
+			const stats = data.stats || {};
+			const search = data.search || {};
+			const coverage = stats.chunks ? Math.round(((stats.vectors || 0) / stats.chunks) * 100) : 0;
+			const maxExt = Math.max(1, ...(data.byExt || []).map((item) => item.docs));
+			const maxTrend = Math.max(1, ...(data.trend || []).map((item) => item.count));
+			const statusLabel = { ready: '已索引', parsing: '解析中', pending: '排队', failed: '失败' };
+			const statusColor = { ready: 'ok', parsing: 'busy', pending: 'idle', failed: 'bad' };
+
+			const card = (label, value, hint) => h('div', { className: 'dsh-kb-metric', key: label },
+				h('span', { className: 'dsh-kb-metricLabel' }, label),
+				h('strong', { className: 'dsh-kb-metricValue' }, value),
+				hint ? h('span', { className: 'dsh-kb-metricHint' }, hint) : null);
+
+			return h('div', { className: 'dsh-kb-dash' },
+				h('div', { className: 'dsh-kb-dashHead' },
+					h('div', { className: 'dsh-kb-docTitle' }, '知识库看板'),
+					h('span', { className: 'dsh-kb-hint' }, `数据目录 ${data.root || ''}`),
+					h('span', { className: 'dsh-kb-viewerGrow' }),
+					h('button', { type: 'button', className: 'dsh-kb-btn', onClick: load, disabled: loading },
+						h(Icon, { name: 'refresh', size: 13 }), loading ? '刷新中…' : '刷新')),
+
+				h('div', { className: 'dsh-kb-metrics' },
+					card('知识库', stats.kbs ?? 0, '个'),
+					card('文档', stats.docs ?? 0, `共 ${bytes(stats.bytes)}`),
+					card('检索片段', stats.chunks ?? 0, `平均 ${stats.docs ? Math.round((stats.chunks || 0) / stats.docs) : 0} 段/篇`),
+					card('向量', stats.vectors ?? 0, `覆盖率 ${coverage}%`),
+					card('检索次数', search.total ?? 0, `今日 ${search.today ?? 0}`)),
+
+				h('div', { className: 'dsh-kb-dashGrid' },
+					// 文件类型分布
+					h('section', { className: 'dsh-kb-card' },
+						h('h4', null, '文件类型分布'),
+						(data.byExt || []).length === 0
+							? h('p', { className: 'dsh-kb-hint' }, '还没有文档')
+							: (data.byExt || []).map((item) => h('div', { className: 'dsh-kb-distRow', key: item.ext },
+								h('span', { className: 'dsh-kb-distLabel' }, `.${item.ext}`),
+								h('span', { className: 'dsh-kb-bar' },
+									h('i', { style: { width: `${Math.round((item.docs / maxExt) * 100)}%` } })),
+								h('span', { className: 'dsh-kb-distValue' }, `${item.docs} · ${bytes(item.bytes)}`)))),
+
+					// 解析状态
+					h('section', { className: 'dsh-kb-card' },
+						h('h4', null, '解析状态'),
+						h('div', { className: 'dsh-kb-chips' },
+							Object.entries(data.byStatus || {}).map(([status, count]) => h('span', {
+								className: `dsh-kb-chip dsh-kb-chip--${statusColor[status] || 'idle'}`,
+								key: status,
+							}, `${statusLabel[status] || status} ${count}`))),
+						h('h4', { className: 'dsh-kb-subHead' }, '各知识库'),
+						(data.byKb || []).map((kb) => h('div', { className: 'dsh-kb-distRow', key: kb.id },
+							h('span', { className: 'dsh-kb-distLabel dsh-kb-distLabel--wide' }, kb.name),
+							h('span', { className: 'dsh-kb-distValue' }, `${kb.docs} 篇 · ${bytes(kb.bytes)}`)))),
+
+					// 检索趋势
+					h('section', { className: 'dsh-kb-card' },
+						h('h4', null, '最近 7 天检索'),
+						(data.trend || []).length === 0
+							? h('p', { className: 'dsh-kb-hint' }, '还没有检索记录（搜索框或 kb_search 都会记）')
+							: h('div', { className: 'dsh-kb-spark' },
+								(data.trend || []).map((item) => h('div', { className: 'dsh-kb-sparkCol', key: item.day, title: `${item.day}：${item.count} 次` },
+									h('div', { className: 'dsh-kb-sparkBar', style: { height: `${Math.max(4, Math.round((item.count / maxTrend) * 100))}%` } }),
+									h('span', { className: 'dsh-kb-sparkLabel' }, (item.day || '').slice(5))))),
+						h('div', { className: 'dsh-kb-kv dsh-kb-kv--tight' },
+							h('span', null, '零命中率'), h('strong', null, `${search.zeroRate ?? 0}%`),
+							h('span', null, '平均耗时'), h('strong', null, `${search.avgMs ?? 0} ms`),
+							h('span', null, '混合检索'), h('strong', null, `${search.hybrid ?? 0} 次`),
+							h('span', null, '最近一次'), h('strong', null, search.lastAt ? when(search.lastAt) : '—'))),
+
+					// 热门检索词 + 最近检索
+					h('section', { className: 'dsh-kb-card' },
+						h('h4', null, '热门检索词'),
+						(data.topQueries || []).length === 0
+							? h('p', { className: 'dsh-kb-hint' }, '还没有')
+							: h('div', { className: 'dsh-kb-chips' },
+								(data.topQueries || []).map((item) => h('span', { className: 'dsh-kb-chip', key: item.query }, `${item.query} · ${item.count}`))),
+						h('h4', { className: 'dsh-kb-subHead' }, '最近检索'),
+						(data.recent || []).length === 0
+							? h('p', { className: 'dsh-kb-hint' }, '还没有')
+							: h('div', { className: 'dsh-kb-list' },
+								(data.recent || []).map((item, index) => h('div', { className: 'dsh-kb-listRow', key: `${item.ts}-${index}` },
+									h('span', { className: 'dsh-kb-listMain' }, item.query || '（空查询）'),
+									h('span', { className: 'dsh-kb-listMeta' }, `${item.hits} 命中 · ${item.mode} · ${item.tookMs}ms`),
+									h('span', { className: 'dsh-kb-listTime' }, when(item.ts)))))),
+
+					// 最近添加
+					h('section', { className: 'dsh-kb-card' },
+						h('h4', null, '最近添加'),
+						(data.recentDocs || []).length === 0
+							? h('p', { className: 'dsh-kb-hint' }, '还没有文档')
+							: h('div', { className: 'dsh-kb-list' },
+								(data.recentDocs || []).map((doc) => h('div', { className: 'dsh-kb-listRow', key: doc.id },
+									h('span', { className: 'dsh-kb-listMain' }, doc.name),
+									h('span', { className: 'dsh-kb-listMeta' }, `.${doc.ext} · ${bytes(doc.bytes)} · ${statusLabel[doc.status] || doc.status}`),
+									h('span', { className: 'dsh-kb-listTime' }, when(doc.createdAt))))))));
+		}
+
 		// ── 主页面 ──────────────────────────────────────────────────────────
 		// 「问 AI」的会话入口由 apply 注入（组件拿不到 ctx）
 		let sessionStarter = null;
@@ -968,7 +1097,8 @@ window.__ModuleLoader__.load({
 
 			const searchTimer = React.useRef(null);
 			const onQueryChange = (value) => {
-				patch({ query: value, view: value.trim() ? 'search' : 'doc' });
+				// 搜索时离开看板/设置，否则结果被挡住看不见
+				patch({ query: value, view: value.trim() ? 'search' : 'doc', dashOpen: false, showSettings: false });
 				if (searchTimer.current) clearTimeout(searchTimer.current);
 				searchTimer.current = setTimeout(() => runSearch(value), 280);
 			};
@@ -1057,6 +1187,17 @@ window.__ModuleLoader__.load({
 						}, h(Icon, { name: 'close', size: 12 }))
 						: null),
 				h('div', { className: 'dsh-kb-headActions' },
+					h('span', { className: 'dsh-kb-seg', role: 'group', 'aria-label': '视图' },
+						h('button', {
+							type: 'button',
+							className: cx('dsh-kb-segBtn', !current.dashOpen && !current.showSettings && 'dsh-kb-segBtn--on'),
+							onClick: () => patch({ dashOpen: false, showSettings: false }),
+						}, '文档'),
+						h('button', {
+							type: 'button',
+							className: cx('dsh-kb-segBtn', current.dashOpen && !current.showSettings && 'dsh-kb-segBtn--on'),
+							onClick: () => patch({ dashOpen: true, showSettings: false }),
+						}, '看板')),
 					h('button', {
 						type: 'button', className: 'dsh-kb-btn',
 						onClick: () => {
@@ -1127,7 +1268,9 @@ window.__ModuleLoader__.load({
 									onClick: () => patch({ showSettings: false }),
 								}, h(Icon, { name: 'chevron', size: 12, className: 'dsh-kb-rot180' }), '返回')),
 							h(SettingsSection))
-						: (current.view === 'search' && current.query ? h(SearchView) : h(DocView, { onAsk, onReindex, onDelete }))),
+						: current.dashOpen
+							? h(Dashboard)
+							: (current.view === 'search' && current.query ? h(SearchView) : h(DocView, { onAsk, onReindex, onDelete }))),
 			),
 			h(Dialog),
 			current.bigView && current.doc ? h(BigView, { doc: current.doc }) : null);
@@ -1499,6 +1642,38 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-progressTrack{height:6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;}',
 				'.dsh-kb-progressFill{height:100%;border-radius:999px;background:var(--dsw-alias-label-brand,#1f6feb);transition:width .25s ease;}',
 				'.dsh-kb-progressText{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				// 看板
+				'.dsh-kb-dash{display:flex;flex-direction:column;gap:14px;flex:1;min-height:0;overflow-y:auto;padding:16px 20px 36px;}',
+				'.dsh-kb-dashHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}',
+				'.dsh-kb-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;}',
+				'.dsh-kb-metric{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-metricLabel{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-metricValue{font-size:20px;font-weight:700;line-height:1.3;}',
+				'.dsh-kb-metricHint{font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-dashGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;}',
+				'.dsh-kb-subHead{margin-top:12px!important;}',
+				'.dsh-kb-distRow{display:flex;align-items:center;gap:8px;font-size:12px;}',
+				'.dsh-kb-distLabel{flex:none;width:46px;color:var(--dsw-alias-label-secondary);font-family:ui-monospace,Menlo,monospace;font-size:11.5px;}',
+				'.dsh-kb-distLabel--wide{width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit;color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-distValue{flex:none;font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-bar{flex:1;height:6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;}',
+				'.dsh-kb-bar i{display:block;height:100%;border-radius:999px;background:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-chips{display:flex;flex-wrap:wrap;gap:6px;}',
+				'.dsh-kb-chip{padding:2px 8px;border-radius:999px;font-size:11.5px;border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-chip--ok{color:#228a4e;border-color:rgba(34,160,90,.4);}',
+				'.dsh-kb-chip--bad{color:var(--dsw-alias-label-danger,#d14343);border-color:rgba(209,67,67,.4);}',
+				'.dsh-kb-chip--busy{color:#a8741a;border-color:rgba(217,164,65,.5);}',
+				'.dsh-kb-spark{display:flex;align-items:flex-end;gap:6px;height:76px;padding:6px 2px 0;}',
+				'.dsh-kb-sparkCol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;}',
+				'.dsh-kb-sparkBar{width:100%;max-width:26px;border-radius:4px 4px 0 0;background:var(--dsw-alias-label-brand,#1f6feb);opacity:.75;}',
+				'.dsh-kb-sparkLabel{font-size:10px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-kv--tight{grid-template-columns:auto 1fr auto 1fr;font-size:11.5px;}',
+				'.dsh-kb-list{display:flex;flex-direction:column;gap:4px;}',
+				'.dsh-kb-listRow{display:flex;align-items:baseline;gap:8px;font-size:12px;padding:3px 0;border-bottom:1px dashed var(--dsw-alias-border-l1);}',
+				'.dsh-kb-listRow:last-child{border-bottom:none;}',
+				'.dsh-kb-listMain{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+				'.dsh-kb-listMeta{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-listTime{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);width:56px;text-align:right;}',
 				'.dsh-kb-barIcon--active{opacity:1;color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-rowActions{display:none;gap:2px;flex:none;}',
 				'.dsh-kb-row:hover .dsh-kb-rowActions,.dsh-kb-row:focus-visible .dsh-kb-rowActions{display:inline-flex;}',

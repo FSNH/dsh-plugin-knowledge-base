@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // Client 半部的"能不能渲染出来"冒烟测试（不依赖浏览器）。
 //
 // 目的：在没有浏览器控制通道的情况下，至少证明
@@ -234,7 +234,7 @@ tree = renderPage();
 const officeFrame = tree.find((node) => node.type === 'iframe');
 check('Office 不再用 iframe（避免浏览器 PDF 阅读器自带缩略图栏）', !officeFrame);
 check('渲染中显示提示', tree.some((node) => String(node.props?.className).includes('dsh-kb-pagesLoading')));
-check('有「原版式 / 文字」切换', tree.filter((node) => String(node.props?.className).includes('dsh-kb-segBtn')).length === 2);
+check('有「原版式 / 文字」切换', tree.filter((node) => String(node.props?.children || '') === '原版式').length === 1);
 
 internals.patch({ previewInfo: { docId: 'd4', pages: 3 }, currentPage: 1, pageMode: 'scroll' });
 tree = renderPage();
@@ -395,7 +395,41 @@ internals.patch({ progress: { pending: 0, parsing: 0, ready: 6, failed: 0, total
 back.props.onClick();
 check('点返回回到文档区', internals.state.showSettings === false);
 
-console.log('\n[8] 卸载清理');
+console.log('\n[8] 看板');
+{
+	const now = Date.now();
+	internals.patch({
+		showSettings: false,
+		dashOpen: true,
+		dashData: {
+			stats: { kbs: 1, docs: 6, chunks: 47, bytes: 81920, vectors: 47 },
+			byExt: [{ ext: 'pptx', docs: 3, bytes: 60000 }, { ext: 'md', docs: 1, bytes: 400 }],
+			byStatus: { ready: 5, pending: 0, parsing: 1, failed: 0 },
+			byKb: [{ id: 'k1', name: '我的资料库', docs: 6, bytes: 81920 }],
+			search: { total: 12, today: 3, zeroHit: 2, hybrid: 5, avgMs: 21, zeroRate: 17, lastAt: now },
+			trend: [{ day: '2026-11-14', count: 2 }, { day: '2026-11-15', count: 5 }, { day: '2026-11-16', count: 5 }],
+			topQueries: [{ query: '出口登记', count: 3 }],
+			recent: [{ ts: now, query: '出口登记', mode: 'hybrid', hits: 2, tookMs: 30 }],
+			recentDocs: [{ id: 'd1', name: '示例-产品培训.pptx', ext: 'pptx', bytes: 1234, status: 'ready', createdAt: now, indexedAt: now }],
+			root: 'C:\\Users\\test\\.dsh\\kb',
+		},
+	});
+	const dash = renderPage();
+	check('看板标题', dash.some((node) => String(node.props?.children || '').includes('知识库看板')));
+	check('五张指标卡', dash.filter((node) => String(node.props?.className) === 'dsh-kb-metric').length === 5);
+	check('向量覆盖率算出来了', dash.some((node) => String(node.props?.children || '').includes('覆盖率 100%')));
+	check('文件类型分布有条形', dash.filter((node) => String(node.props?.className).includes('dsh-kb-bar')).length >= 2);
+	check('解析状态 chip', dash.some((node) => String(node.props?.children || '').includes('已索引 5')));
+	check('各知识库分布', dash.some((node) => String(node.props?.children || '').includes('我的资料库')));
+	check('趋势柱状图', dash.filter((node) => String(node.props?.className).includes('dsh-kb-sparkCol')).length === 3);
+	check('热门检索词', dash.some((node) => String(node.props?.children || '').includes('出口登记 · 3')));
+	check('最近检索列表', dash.some((node) => String(node.props?.children || '').includes('2 命中')));
+	check('最近添加列表', dash.some((node) => String(node.props?.children || '').includes('示例-产品培训.pptx')));
+	check('零命中率显示', dash.some((node) => String(node.props?.children || '').includes('17%')));
+	internals.patch({ dashOpen: false, dashData: null });
+}
+
+console.log('\n[9] 卸载清理');
 try {
 	for (const dispose of disposers) dispose();
 	check('disposer 全部可调用', true);

@@ -210,7 +210,31 @@ console.log('\n[5] 原版式预览器（没有 officeKit 时应干净降级）')
 	check('无 officeKit 时逐页渲染也抛 unavailable', pageCode === 'unavailable', pageCode);
 }
 
-console.log('\n[6] 统计');
+console.log('\n[6] 检索日志与看板聚合');
+{
+	// 前面的检索用例已经写进日志了，所以这里比的都是"增量"
+	const before = store.dashboard(Date.now());
+	const trendBefore = (before.trend[before.trend.length - 1] || {}).count || 0;
+	store.logSearch({ now: Date.now(), query: '出口登记', mode: 'hybrid', hits: 2, tookMs: 30, kbId: 'k_test0001' });
+	store.logSearch({ now: Date.now(), query: '出口登记', mode: 'keyword', hits: 1, tookMs: 12, kbId: 'k_test0001' });
+	store.logSearch({ now: Date.now(), query: '不存在的东西', mode: 'keyword', hits: 0, tookMs: 8, kbId: null });
+	const after = store.dashboard(Date.now());
+	check('检索次数 +3', after.search.total === before.search.total + 3, `${before.search.total} → ${after.search.total}`);
+	check('今日次数 +3', after.search.today === before.search.today + 3, `${before.search.today} → ${after.search.today}`);
+	check('零命中 +1', after.search.zeroHit === before.search.zeroHit + 1, `${before.search.zeroHit} → ${after.search.zeroHit}`);
+	check('混合检索 +1', after.search.hybrid === before.search.hybrid + 1, `${before.search.hybrid} → ${after.search.hybrid}`);
+	check('零命中率是个百分数', after.search.zeroRate >= 0 && after.search.zeroRate <= 100, String(after.search.zeroRate));
+	check('平均耗时是个合理的毫秒数', after.search.avgMs >= 0 && after.search.avgMs <= 5000, String(after.search.avgMs));
+	const top = after.topQueries.find((item) => item.query === '出口登记');
+	check('热门词里「出口登记」出现 2 次', top?.count === 2, JSON.stringify(top));
+	check('最近检索按时间倒序', after.recent[0]?.query === '不存在的东西', JSON.stringify(after.recent[0]));
+	const trendAfter = (after.trend[after.trend.length - 1] || {}).count || 0;
+	check('今日趋势 +3', trendAfter === trendBefore + 3, `${trendBefore} → ${trendAfter}`);
+	check('类型分布可读', Array.isArray(after.byExt), JSON.stringify(after.byExt));
+	check('各知识库分布可读', Array.isArray(after.byKb), JSON.stringify(after.byKb));
+}
+
+console.log('\n[7] 统计');
 console.log(`  ${JSON.stringify(store.stats())}`);
 
 store.close();
