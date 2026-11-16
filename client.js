@@ -54,6 +54,7 @@ window.__ModuleLoader__.load({
 				upload: ['M8 11.5V3.5', 'M5 6.2 8 3.2l3 3', 'M3 11.5v2h10v-2'],
 				spark: ['M8 2.5v2.6M8 10.9v2.6M2.5 8h2.6M10.9 8h2.6', 'M4.7 4.7l1.8 1.8M9.5 9.5l1.8 1.8M11.3 4.7 9.5 6.5M6.5 9.5l-1.8 1.8'],
 				refresh: ['M13 8a5 5 0 1 1-1.5-3.6', 'M13.2 2.6v3h-3'],
+				settings: ['M2.5 5.5h11', 'M2.5 10.5h11', 'M6 3.5v4', 'M10 8.5v4'],
 				trash: ['M3.5 5h9', 'M6.5 5V3.5h3V5', 'M5 5l.6 8h4.8L11 5'],
 				close: ['M3.5 3.5l9 9M12.5 3.5l-9 9'],
 				open: ['M9.5 3.5h3v3', 'M12.5 3.5 6 10', 'M11 10.5v2.5H3.5V5.5H6'],
@@ -126,6 +127,7 @@ window.__ModuleLoader__.load({
 			bigView: false,
 			bigMode: 'single',
 			sideOpen: true,
+			showSettings: false,
 		};
 
 		const listeners = new Set();
@@ -194,6 +196,7 @@ window.__ModuleLoader__.load({
 				patch({
 					selectedId: nodeId,
 					view: 'doc',
+					showSettings: false,
 					doc: data.node,
 					docText: appending ? `${state.docText}\n\n${data.text}` : data.text,
 					docNext: data.end,
@@ -1074,7 +1077,13 @@ window.__ModuleLoader__.load({
 							uploadFiles(event.target.files, currentFolderId(current));
 							event.target.value = '';
 						},
-					}))),
+					}),
+					h('button', {
+						type: 'button', className: cx('dsh-kb-iconBtn', current.showSettings && 'dsh-kb-iconBtn--on'),
+						title: '知识库设置',
+						'aria-pressed': Boolean(current.showSettings),
+						onClick: () => patch({ showSettings: !state.showSettings }),
+					}, h(Icon, { name: 'settings', size: 15 })))),
 
 			// 提示条
 			current.notice || current.error
@@ -1107,7 +1116,17 @@ window.__ModuleLoader__.load({
 						onClick: () => patch({ sideOpen: true }),
 					}, h(Icon, { name: 'chevron', size: 14 })),
 				h('div', { className: 'dsh-kb-main' },
-					current.view === 'search' && current.query ? h(SearchView) : h(DocView, { onAsk, onReindex, onDelete })),
+					current.showSettings
+						? h('div', { className: 'dsh-kb-settingsPane' },
+							h('div', { className: 'dsh-kb-settingsHead' },
+								h('div', { className: 'dsh-kb-docTitle' }, '知识库设置'),
+								h('span', { className: 'dsh-kb-viewerGrow' }),
+								h('button', {
+									type: 'button', className: 'dsh-kb-btn',
+									onClick: () => patch({ showSettings: false }),
+								}, h(Icon, { name: 'chevron', size: 12, className: 'dsh-kb-rot180' }), '返回')),
+							h(SettingsSection))
+						: (current.view === 'search' && current.query ? h(SearchView) : h(DocView, { onAsk, onReindex, onDelete }))),
 			),
 			h(Dialog),
 			current.bigView && current.doc ? h(BigView, { doc: current.doc }) : null);
@@ -1304,6 +1323,9 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-hitHead{font-weight:400;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-hitSnippet{font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;}',
 				'.dsh-kb-settings{display:flex;flex-direction:column;gap:14px;}',
+				'.dsh-kb-settingsPane{display:flex;flex-direction:column;flex:1;min-height:0;padding:14px 20px 36px;overflow-y:auto;}',
+				'.dsh-kb-settingsHead{display:flex;align-items:center;gap:10px;margin-bottom:14px;}',
+				'.dsh-kb-iconBtn--on{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);}',
 				'.dsh-kb-settingsIntro{margin:0;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-card{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;}',
 				'.dsh-kb-card h4{margin:0;font-size:13px;font-weight:600;}',

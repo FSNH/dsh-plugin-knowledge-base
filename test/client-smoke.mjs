@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // Client 半部的"能不能渲染出来"冒烟测试（不依赖浏览器）。
 //
 // 目的：在没有浏览器控制通道的情况下，至少证明
@@ -370,7 +370,24 @@ check('收起后左侧有展开条', Boolean(rail));
 rail.props.onClick();
 check('点展开条后 sideOpen=true', internals.state.sideOpen === true);
 
-console.log('\n[7] 卸载清理');
+console.log('\n[7] 面板内「知识库设置」');
+internals.patch({ showSettings: false, sideOpen: true, selectedId: '', doc: null });
+let pane = renderPage();
+const gear = pane.find((node) => node.type === 'button' && node.props?.title === '知识库设置');
+check('顶部有齿轮按钮', Boolean(gear));
+check('有系统设置插槽注册', registrations.some((item) => item.key === 'settings.section'));
+gear.props.onClick();
+check('点齿轮打开设置', internals.state.showSettings === true);
+pane = renderPage();
+check('设置面板渲染出来', pane.some((node) => String(node.props?.className).includes('dsh-kb-settingsPane')));
+check('设置里有存放目录', pane.some((node) => String(node.props?.children || '').includes('存放目录')));
+check('设置里有索引状态', pane.some((node) => String(node.props?.children || '').includes('索引状态')));
+const back = pane.find((node) => node.type === 'button' && String(node.props?.children || '').includes('返回'));
+check('有返回按钮', Boolean(back));
+back.props.onClick();
+check('点返回回到文档区', internals.state.showSettings === false);
+
+console.log('\n[8] 卸载清理');
 try {
 	for (const dispose of disposers) dispose();
 	check('disposer 全部可调用', true);
