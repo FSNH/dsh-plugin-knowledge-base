@@ -13,3 +13,14 @@ desktop.ini
 *.preview.pdf
 *.pages/
 *.thumbs/
+
+# ── 密钥 / 本地配置：绝不提交 ─────────────────────────────────────────────
+# 向量检索的 API Key 存在 $DSH_HOME/kb/settings.json（在仓库目录之外）。
+# 以下规则是第二道保险：即使有人把它拷进仓库目录，也不会被 git 收走。
+settings.json
+credentials.json
+.env
+.env.*
+*.key
+*.pem
+id_rsa*

@@ -11,8 +11,10 @@
         maxFileBytes: 67108864
         # 解析队列并发（1-2 比较稳妥）
         parseConcurrency: 1
-        # 检索：关键词检索默认开启；向量检索默认关闭，需要填 OpenAI 兼容的 embeddings 接口
+        # 向量检索：地址和模型给出厂默认（百炼），**密钥请填在界面上**，
+        # 它只写进 $DSH_HOME/kb/settings.json，永远不进这个文件、更不进仓库。
+        # enabled 保持 false：没填 Key 之前打开只会让索引白跑一遍。
         embedding:
           enabled: false
-          baseUrl: ''
-          model: ''
+          baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+          model: 'text-embedding-v4'

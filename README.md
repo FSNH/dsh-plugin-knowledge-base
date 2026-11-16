@@ -95,16 +95,19 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 在插件行的 `config` 里改（插件页 → 知识库 → 配置）：
 
 ```yaml
-root: ''                 # 库目录，留空 = $DSH_HOME/kb
-maxFileBytes: 67108864   # 单文件上限，默认 64 MiB
-parseConcurrency: 1      # 解析并发
+root: ''                                                        # 库目录，留空 = $DSH_HOME/kb
+maxFileBytes: 67108864                                          # 单文件上限，默认 64 MiB
+parseConcurrency: 1                                             # 解析并发
 embedding:
-  enabled: false         # 向量检索，默认关
-  baseUrl: ''            # OpenAI 兼容的 embeddings 接口
-  model: ''
+  enabled: false                                                # 向量检索：填好 Key 再打开
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # 出厂默认（百炼）
+  model: 'text-embedding-v4'                                    # 出厂默认
 ```
 
-向量检索的 KEY 走环境变量 `DSH_KB_EMBEDDING_KEY`，不写进配置文件。开启后索引时会把片段、检索时会把查询发给你配置的端点。
+**地址和模型已经预填好百炼的默认值**，正常情况下你只需要在设置里填 API Key 并勾选启用。
+
+> 🔐 **密钥怎么存**：只在设置界面里填，写进 `$DSH_HOME/kb/settings.json`（权限 0600），**不写进任何被 git 跟踪的文件**。
+> `config.yaml` 的 `apiKey` 字段保留可用，但没人会建议你把 key 提交上去；仓库里还有 [`test/no-secrets.mjs`](test/no-secrets.mjs) 做提交前扫描。
 
 ### 开启向量检索（可选）
 
@@ -114,11 +117,13 @@ embedding:
 
 **界面上直接填，不用改配置、不用重启：**
 
-> 知识库页面 → 右上角**齿轮** → 「向量检索」卡片 → 勾选启用，填接口地址 / 模型 / API Key → **测试连接** → **保存** → 点「重建全部索引」
+> 知识库页面 → 右上角**齿轮** → 「向量检索」卡片 → 填 API Key → 勾选启用 → **测试连接** → **保存** → 点「重建全部索引」
+>
+> 接口地址和模型已经预填成百炼的默认值，直接能用；换服务商时再改这两栏。
 
 | 服务 | 接口地址（填到 /v1 为止） | 模型 |
 |---|---|---|
-| 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `text-embedding-v3` |
+| 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `text-embedding-v4` |
 | 硅基流动 | `https://api.siliconflow.cn/v1` | `BAAI/bge-m3` |
 | OpenAI | `https://api.openai.com/v1` | `text-embedding-3-small` |
 | 本机 Ollama | `http://127.0.0.1:11434/v1` | `nomic-embed-text`（key 随便填） |
@@ -188,6 +193,9 @@ $env:ELECTRON_RUN_AS_NODE=1
 
 # 向量检索链路：自带一个假 embeddings 服务，验证写入向量 + hybrid 检索 + 接口挂了降级
 & "<DeepSeek Harness.exe>" test/vector.mjs
+
+# 密钥扫描：确认仓库里没有 API Key / 私钥 / token（提交前跑一下）
+& "<DeepSeek Harness.exe>" test/no-secrets.mjs
 ```
 
 仓库里**不含任何真实文档**，docx / xlsx 解析用例默认跳过。想覆盖真实文件解析，指一个你自己的样例：
