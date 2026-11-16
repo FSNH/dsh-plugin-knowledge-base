@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // Client 半部的"能不能渲染出来"冒烟测试（不依赖浏览器）。
 //
 // 目的：在没有浏览器控制通道的情况下，至少证明
@@ -395,6 +395,55 @@ internals.patch({ progress: { pending: 0, parsing: 0, ready: 6, failed: 0, total
 
 back.props.onClick();
 check('点返回回到文档区', internals.state.showSettings === false);
+
+console.log('\n[7] 行操作菜单（⋯ 下拉）');
+{
+	internals.patch({
+		menu: null,
+		sideOpen: true,
+		nodes: [
+			{ id: 'f1', kbId: 'k1', parentId: null, kind: 'folder', name: '示例资料', path: '/f1', sort: 0 },
+			{ id: 'd9', kbId: 'k1', parentId: 'f1', kind: 'doc', name: '示例文档.md', path: '/f1/d9', sort: 0, bytes: 10, status: 'ready', ext: 'md', chars: 10 },
+		],
+		expanded: { f1: true },
+	});
+	let page = renderPage();
+	const moreButtons = page.filter((node) => node.type === 'button' && String(node.props?.className).includes('dsh-kb-moreBtn'));
+	check('每行一个「⋯」按钮', moreButtons.length === 2, `count=${moreButtons.length}`);
+	check('不再有常驻的移动/删除图标按钮',
+		page.filter((node) => node.type === 'button' && ['移动到…', '重命名', '删除'].includes(node.props?.title)).length === 0);
+
+	moreButtons[0].props.onClick();
+	check('点 ⋯ 打开菜单', internals.state.menu?.id === 'f1', JSON.stringify(internals.state.menu));
+	page = renderPage();
+	const items = page.filter((node) => String(node.props?.className).includes('dsh-kb-menuItem')).map((node) => [].concat(node.props.children).join(''));
+	check('文件夹菜单有 5 项', items.length === 5, JSON.stringify(items));
+	check('文件夹菜单含「新建子文件夹」', items.includes('新建子文件夹'), JSON.stringify(items));
+	check('文件夹菜单含「导入文件到这里」', items.includes('导入文件到这里'), JSON.stringify(items));
+
+	// 文档行的菜单少两项
+	internals.patch({ menu: { id: 'd9', x: 20, y: 20 } });
+	page = renderPage();
+	const docItems = page.filter((node) => String(node.props?.className).includes('dsh-kb-menuItem')).map((node) => [].concat(node.props.children).join(''));
+	check('文档菜单 3 项', docItems.length === 3, JSON.stringify(docItems));
+	check('文档菜单不含导入', !docItems.includes('导入文件到这里'), JSON.stringify(docItems));
+
+	// 点遮罩关闭
+	internals.patch({ menu: { id: 'f1', x: 20, y: 20 } });
+	page = renderPage();
+	const backdrop = page.find((node) => String(node.props?.className).includes('dsh-kb-menuBackdrop'));
+	check('有遮罩层', Boolean(backdrop));
+	backdrop.props.onClick();
+	check('点遮罩关掉菜单', internals.state.menu === null);
+
+	// 「导入文件到这里」会把目标目录记下来
+	internals.patch({ menu: { id: 'f1', x: 20, y: 20 } });
+	page = renderPage();
+	const importItem = page.find((node) => String(node.props?.className).includes('dsh-kb-menuItem') && [].concat(node.props?.children || []).join('') === '导入文件到这里');
+	importItem.props.onClick();
+	check('导入目标设为该文件夹', internals.state.importTarget === 'f1', String(internals.state.importTarget));
+	internals.patch({ menu: null, importTarget: null });
+}
 
 console.log('\n[8] 看板');
 {

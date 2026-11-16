@@ -133,6 +133,8 @@ window.__ModuleLoader__.load({
 			dashData: null,
 			dashError: '',
 			dashLoading: false,
+			menu: null,
+			importTarget: null,
 		};
 
 		const listeners = new Set();
@@ -471,27 +473,23 @@ window.__ModuleLoader__.load({
 					statusDot(node),
 					h('span', { className: 'dsh-kb-rowActions' },
 						h('button', {
-							type: 'button', className: 'dsh-kb-rowBtn', title: '移动到…',
+							type: 'button',
+							className: cx('dsh-kb-rowBtn dsh-kb-moreBtn', current.menu?.id === node.id && 'dsh-kb-rowBtn--on'),
+							title: '更多操作',
+							'aria-haspopup': 'menu',
+							'aria-expanded': current.menu?.id === node.id,
 							onClick: (event) => {
-								event.stopPropagation();
-								askMove(node);
+								event?.stopPropagation?.();
+								const rect = event?.currentTarget?.getBoundingClientRect?.();
+								patch({
+									menu: current.menu?.id === node.id ? null : {
+										id: node.id,
+										x: rect ? Math.max(8, Math.round(rect.right - 170)) : 40,
+										y: rect ? Math.round(rect.bottom + 4) : 40,
+									},
+								});
 							},
-						}, h(Icon, { name: 'folder', size: 12 })),
-						h('button', {
-							type: 'button', className: 'dsh-kb-rowBtn', title: '重命名',
-							onClick: (event) => {
-								event.stopPropagation();
-								askText('重命名', node.name, (name) => nodeAction('rename', { id: node.id, name }));
-							},
-						}, h(Icon, { name: 'doc', size: 12 })),
-						h('button', {
-							type: 'button', className: 'dsh-kb-rowBtn dsh-kb-rowBtn--danger', title: '删除',
-							onClick: (event) => {
-								event.stopPropagation();
-								askConfirm(`删除「${node.name}」？${isFolder ? '里面的内容也会一起删除。' : '原文件也会被删掉。'}`,
-									() => nodeAction('delete', { id: node.id }));
-							},
-						}, h(Icon, { name: 'trash', size: 12 })))),
+						}, '⋯'))),
 					isFolder && open
 						? ((byParent.get(node.id) || []).length
 							? h(TreeRows, { byParent, parentKey: node.id, depth: depth + 1 })
@@ -499,7 +497,7 @@ window.__ModuleLoader__.load({
 								key: `${node.id}-empty`,
 								className: 'dsh-kb-rowHint',
 								style: { paddingLeft: 6 + (depth + 1) * 14 },
-							}, '（空文件夹：把文件拖进来，或用行上的「移动到…」）'))
+							}, '（空文件夹：把文件拖进来，或用这一行右边的「⋯」新建子文件夹 / 导入文件）'))
 						: null);
 			});
 		}
@@ -1216,8 +1214,10 @@ window.__ModuleLoader__.load({
 					h('input', {
 						ref: fileInput, type: 'file', multiple: true, style: { display: 'none' },
 						onChange: (event) => {
-							uploadFiles(event.target.files, currentFolderId(current));
+							// 从文件夹行的「⋯ → 导入文件」进来时，落在那个文件夹里
+							uploadFiles(event.target.files, state.importTarget || currentFolderId(current));
 							event.target.value = '';
+							patch({ importTarget: null });
 						},
 					}),
 					h('button', {
@@ -1270,6 +1270,45 @@ window.__ModuleLoader__.load({
 							: (current.view === 'search' && current.query ? h(SearchView) : h(DocView, { onAsk, onReindex, onDelete }))),
 			),
 			h(Dialog),
+			// 行操作菜单：fixed 定位，免得被树栏的滚动裁掉
+			current.menu ? (() => {
+				const node = current.nodes.find((entry) => entry.id === current.menu.id);
+				if (!node) return null;
+				const isFolder = node.kind === 'folder';
+				const close = () => patch({ menu: null });
+				const item = (label, onClick, danger) => h('button', {
+					type: 'button', role: 'menuitem',
+					className: cx('dsh-kb-menuItem', danger && 'dsh-kb-menuItem--danger'),
+					onClick: (event) => {
+						event?.stopPropagation?.();
+						close();
+						onClick();
+					},
+				}, label);
+				return h(React.Fragment, null,
+					h('div', { className: 'dsh-kb-menuBackdrop', onClick: close }),
+					h('div', {
+						className: 'dsh-kb-menu', role: 'menu',
+						style: { left: `${current.menu.x}px`, top: `${current.menu.y}px` },
+					},
+					isFolder
+						? item('新建子文件夹', () => askText('新文件夹的名字', '新文件夹', (name) => nodeAction('create', {
+							kbId: node.kbId, parentId: node.id, kind: 'folder', name,
+						})))
+						: null,
+					isFolder
+						? item('导入文件到这里', () => {
+							patch({ importTarget: node.id });
+							fileInput.current?.click();
+						})
+						: null,
+					item('重命名', () => askText('重命名', node.name, (name) => nodeAction('rename', { id: node.id, name }))),
+					item('移动到…', () => askMove(node)),
+					item('删除', () => askConfirm(
+						`删除「${node.name}」？${isFolder ? '里面的内容也会一起删除。' : '原文件也会被删掉。'}`,
+						() => nodeAction('delete', { id: node.id }),
+					), true)));
+			})() : null,
 			current.bigView && current.doc ? h(BigView, { doc: current.doc }) : null);
 		}
 
@@ -1535,6 +1574,13 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-body{display:flex;flex:1;min-height:0;}',
 				'.dsh-kb-side{width:250px;flex:none;border-right:1px solid var(--dsw-alias-border-l1);overflow-y:auto;padding:6px 0 20px;}',
 				'.dsh-kb-rot180{transform:rotate(180deg);}',
+				'.dsh-kb-moreBtn{font-size:15px;line-height:1;letter-spacing:1px;padding-bottom:3px;}',
+				'.dsh-kb-rowBtn--on{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-menuBackdrop{position:fixed;inset:0;z-index:40;}',
+				'.dsh-kb-menu{position:fixed;z-index:41;min-width:172px;padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);box-shadow:0 10px 28px rgba(0,0,0,.3);display:flex;flex-direction:column;}',
+				'.dsh-kb-menuItem{display:flex;align-items:center;height:30px;padding:0 10px;border:none;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;text-align:left;cursor:pointer;}',
+				'.dsh-kb-menuItem:hover{background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-menuItem--danger{color:var(--dsw-alias-label-danger,#d14343);}',
 				'.dsh-kb-tree{display:flex;flex-direction:column;}',
 				'.dsh-kb-row{display:flex;align-items:center;gap:5px;height:28px;padding-right:8px;cursor:pointer;color:var(--dsw-alias-label-primary);border-radius:6px;margin:0 6px;}',
 				'.dsh-kb-row:hover{background:var(--dsw-alias-bg-layer-2);}',
