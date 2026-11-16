@@ -99,6 +99,7 @@ window.__ModuleLoader__.load({
 			kbId: '',
 			nodes: [],
 			stats: null,
+			progress: null,
 			caps: null,
 			root: '',
 			token: '',
@@ -174,7 +175,7 @@ window.__ModuleLoader__.load({
 				patch({
 					loaded: true, loading: false, error: '',
 					kbs: data.kbs, kbId: data.kbId, nodes: data.nodes,
-					stats: data.stats, caps: data.capabilities, root: data.root, token: data.token || '',
+					stats: data.stats, progress: data.progress || null, caps: data.capabilities, root: data.root, token: data.token || '',
 					expanded,
 				});
 				if (state.nodes.some((node) => node.status === 'pending' || node.status === 'parsing')) schedulePoll();
@@ -1140,6 +1141,42 @@ window.__ModuleLoader__.load({
 			const [probing, setProbing] = React.useState(false);
 			const [probe, setProbe] = React.useState(null);
 			const [formNotice, setFormNotice] = React.useState('');
+			const [rebuilding, setRebuilding] = React.useState(false);
+			const watchRef = React.useRef(null);
+
+			const stopWatch = () => {
+				if (watchRef.current) {
+					clearInterval(watchRef.current);
+					watchRef.current = null;
+				}
+			};
+
+			/** 点重建后每 1 秒刷一次状态，全部解析完就停。 */
+			const startWatch = () => {
+				stopWatch();
+				watchRef.current = setInterval(async () => {
+					try { await loadState(state.kbId, true); } catch { /* ignore */ }
+					const progress = state.progress;
+					if (!progress || (progress.pending + progress.parsing) === 0) {
+						stopWatch();
+						setRebuilding(false);
+					}
+				}, 1000);
+			};
+
+			React.useEffect(() => () => stopWatch(), []);
+
+			const rebuildAll = async () => {
+				if (rebuilding) return;
+				try {
+					const data = await api('/reindex-all', { method: 'POST' });
+					patch({ notice: `已排队重建 ${data.queued} 篇文档的索引`, error: '' });
+					setRebuilding(true);
+					startWatch();
+				} catch (error) {
+					patch({ error: error.message || '重建失败' });
+				}
+			};
 			React.useEffect(() => {
 				if (!state.loaded) loadState();
 				let cancelled = false;
@@ -1216,18 +1253,27 @@ window.__ModuleLoader__.load({
 							h('span', null, '总大小'), h('strong', null, bytes(stats.bytes)),
 							h('span', null, '向量'), h('strong', null, stats.vectors))
 						: h('p', { className: 'dsh-kb-hint' }, '读取中…'),
+					(() => {
+						const progress = current.progress;
+						if (!progress) return null;
+						const working = progress.pending + progress.parsing;
+						if (!rebuilding && working === 0) return null;
+						const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+						return h('div', { className: 'dsh-kb-progress', role: 'status' },
+							h('div', { className: 'dsh-kb-progressTrack' },
+								h('div', { className: 'dsh-kb-progressFill', style: { width: `${pct}%` } })),
+							h('div', { className: 'dsh-kb-progressText' },
+								working > 0
+									? `重建中：已完成 ${progress.done} / ${progress.total} 篇`
+										+ `${progress.parsing ? ` · 解析中 ${progress.parsing}` : ''}`
+										+ `${progress.queued ? ` · 排队 ${progress.queued}` : ''}`
+									: `重建完成：${progress.done} / ${progress.total} 篇`));
+					})(),
 					h('div', { className: 'dsh-kb-row2' },
 						h('button', {
 							type: 'button', className: 'dsh-kb-btn',
-							onClick: async () => {
-								try {
-									const data = await api('/reindex-all', { method: 'POST' });
-									patch({ notice: `已排队重建 ${data.queued} 篇文档的索引` });
-								} catch (error) {
-									patch({ notice: error.message || '重建失败' });
-								}
-							},
-						}, h(Icon, { name: 'refresh', size: 14 }), '重建全部索引'),
+							onClick: rebuildAll, disabled: rebuilding,
+						}, h(Icon, { name: 'refresh', size: 14 }), rebuilding ? '重建中…' : '重建全部索引'),
 						h('button', {
 							type: 'button', className: 'dsh-kb-btn',
 							onClick: () => loadState(current.kbId, true),
@@ -1449,6 +1495,10 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-form input[type=text],.dsh-kb-form input[type=password]{box-sizing:border-box;width:100%;height:30px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:12.5px;}',
 				'.dsh-kb-form input:focus{outline:none;border-color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-banner--ok{background:rgba(34,160,90,.12);color:#228a4e;}',
+				'.dsh-kb-progress{display:flex;flex-direction:column;gap:5px;margin:2px 0 4px;}',
+				'.dsh-kb-progressTrack{height:6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;}',
+				'.dsh-kb-progressFill{height:100%;border-radius:999px;background:var(--dsw-alias-label-brand,#1f6feb);transition:width .25s ease;}',
+				'.dsh-kb-progressText{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-barIcon--active{opacity:1;color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-rowActions{display:none;gap:2px;flex:none;}',
 				'.dsh-kb-row:hover .dsh-kb-rowActions,.dsh-kb-row:focus-visible .dsh-kb-rowActions{display:inline-flex;}',

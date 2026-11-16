@@ -384,6 +384,14 @@ check('设置里有存放目录', pane.some((node) => String(node.props?.childre
 check('设置里有索引状态', pane.some((node) => String(node.props?.children || '').includes('索引状态')));
 const back = pane.find((node) => node.type === 'button' && String(node.props?.children || '').includes('返回'));
 check('有返回按钮', Boolean(back));
+
+internals.patch({ progress: { pending: 2, parsing: 1, ready: 3, failed: 0, total: 6, done: 3, queued: 2, active: 1 } });
+pane = renderPage();
+check('重建时显示进度条', pane.some((node) => String(node.props?.className).includes('dsh-kb-progressTrack')));
+check('进度文案带已完成/总数', pane.some((node) => String(node.props?.children?.[0] || '').includes('已完成 3 / 6')
+	|| String(node.props?.children || '').includes('已完成 3 / 6')));
+internals.patch({ progress: { pending: 0, parsing: 0, ready: 6, failed: 0, total: 6, done: 6, queued: 0, active: 0 } });
+
 back.props.onClick();
 check('点返回回到文档区', internals.state.showSettings === false);
 

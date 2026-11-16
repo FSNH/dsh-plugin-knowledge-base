@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // 向量检索链路测试：起一个本地「OpenAI 兼容」的 embeddings 服务，
 // 验证 createEmbedder → insertVectors → search(mode:'hybrid') 这条路径。
 //
@@ -97,7 +97,22 @@ check('向量落库', (store.stats().vectors || 0) === chunks.length, JSON.strin
 check('embeddings 接口被真正调用', requests.length >= 1 && requests[0].count === chunks.length, JSON.stringify(requests));
 check('请求带了 model 字段', requests[0]?.model === 'mock-embed', String(requests[0]?.model));
 
-console.log('\n[2] 混合检索');
+console.log('\n[2] 分批请求（百炼一类服务单次 input ≤ 10）');
+{
+	const many = Array.from({ length: 25 }, (_, index) => `第 ${index + 1} 段测试文本，用于验证分批。`);
+	requests.length = 0;
+	const batchedVectors = await index.insertVectors({
+		nodeId: 'd_vec0001',
+		chunks: many.map((text, ord) => ({ ord, heading: '', page: null, charStart: 0, charEnd: text.length, text })),
+	});
+	check('25 条全部拿到向量', batchedVectors === 25, `got ${batchedVectors}`);
+	check('分成 3 批（10+10+5）', requests.length === 3, `batches=${requests.length} ${JSON.stringify(requests.map((r) => r.count))}`);
+	check('每批不超过 10 条', requests.every((r) => r.count <= 10), JSON.stringify(requests.map((r) => r.count)));
+}
+// 恢复成前面的 4 条分块，继续后面的检索断言
+index.insertChunks({ nodeId: 'd_vec0001', kbId: 'k_vec0001', chunks });
+
+console.log('\n[3] 混合检索');
 const hybrid = await index.search({ query: '出口登记', limit: 5, mode: 'hybrid' });
 check('hybrid 模式生效', hybrid.mode === 'hybrid', hybrid.mode);
 check('hybrid 有结果', hybrid.hits.length > 0, `hits=${hybrid.hits.length}`);
@@ -107,12 +122,12 @@ if (hybrid.hits[0]) {
 		`fts=${hybrid.hits[0].ftsRank} vec=${hybrid.hits[0].vecRank}`);
 }
 
-console.log('\n[3] 关键词模式不受影响');
+console.log('\n[4] 关键词模式不受影响');
 const keyword = await index.search({ query: '出口登记', limit: 5, mode: 'keyword' });
 check('keyword 模式返回 keyword', keyword.mode === 'keyword', keyword.mode);
 check('keyword 有结果', keyword.hits.length > 0, `hits=${keyword.hits.length}`);
 
-console.log('\n[4] 接口不可用时降级为关键词');
+console.log('\n[5] 接口不可用时降级为关键词');
 const brokenEmbedder = createEmbedder({
 	config: { enabled: true, baseUrl: 'http://127.0.0.1:1/v1', model: 'nope' },
 	logger: { warn() {} },
