@@ -19,11 +19,16 @@
 
 ## 三分钟上手
 
+```powershell
+# 1. 装（桌面端把 web 换成 desktop）
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 ```
-1. 装好插件 → 刷新页面 → 左栏点「知识库」
-2. 点「新建知识库」起个名字
-3. 点「上传文件」或把文件拖进来（解析在后台跑）
-4. 左栏点文件 → 右边直接看原版式
+
+```
+2. 刷新页面 → 左栏点「知识库」
+3. 点「新建知识库」起个名字
+4. 点「上传文件」或把文件拖进来（解析在后台跑）
+5. 左栏点文件 → 右边直接看原版式
 ```
 
 想跟文档对话：文档页点「✳ 问 AI」，提问会预填进会话输入框，你把问题补完发出去即可。
@@ -39,30 +44,43 @@
 
 ## 安装
 
-插件是一个 DSH bundle（本地目录安装）：
+插件是一个标准的 DSH bundle，三种装法。
+
+### 方式一：从 npm 装（推荐）
 
 ```powershell
-# 方式一：让 agent 装
-plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
+```
 
-# 方式二：界面里装
-# Plugins → Add plugin → 选择这个目录
+一条命令就够：它会把包装进 profile、把包名写进 `dsh.profile.bundles`，profile 启动时再合并包内自带的 `cordis.patch.yml`。**不需要手改任何 profile 文件**。
+
+- 装哪个 profile 就把 `web` 换成你的（桌面端是 `desktop`）
+- 升级：把版本号换成新的（`@0.1.1`）再执行一次
+- 卸载：`dsh plugin --profile web remove @xiaofanzhao/dsh-plugin-knowledge-base`
+
+> 如果提示 `E404 / 找不到这个版本`，说明该版本还没发布到 npm，先用方式二。
+
+### 方式二：从源码装（想改代码，或还没发布时）
+
+```powershell
+git clone https://github.com/FSNH/dsh-plugin-knowledge-base.git
+dsh plugin --profile web add .\dsh-plugin-knowledge-base
+```
+
+`add <本地目录>` 建立的是 link，之后你改 `client.js` / `lib/*` 只要在插件页里关掉再打开（或刷新页面）就能看到效果，不用重新安装。
+
+### 方式三：界面里装 / 让 agent 装
+
+```powershell
+plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
+# 或界面：Plugins → Add plugin → 选择这个目录
 ```
 
 装好后**刷新页面**，左栏会多一个「知识库」图标。
 
 > 依赖：`pdfjs-dist`（PDF 文字层抽取）。第一次装需要联网安装依赖。
 > Office 原版式预览依赖 DSH 自带的 LibreOffice（`officeKit`）：没有它也能用，只是 Office 文档只能看抽取出来的文字。
-
-### 从 npm 安装（发布之后）
-
-装好并发布到 npm 之后，一行命令即可（和你装 `dsh-better-sidebar` 一样）：
-
-```powershell
-dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
-```
-
-`dsh plugin add` 做三件事：用 pnpm 把包装进 profile、把包名追加到 `dsh.profile.bundles`、profile 启动时合并包内自带的 `cordis.patch.yml`。**不需要手改任何 profile 文件**。
+> **包名 ≠ 仓库名**：npm 上的 `dsh-plugin-knowledge-base` 已被别人的包占用，所以包名带 `@xiaofanzhao/` 作用域；仓库名保持不变。
 
 ## 打包与发布
 
