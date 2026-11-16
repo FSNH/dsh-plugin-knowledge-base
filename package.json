@@ -1,0 +1,52 @@
+{
+  "name": "dsh-plugin-knowledge-base",
+  "version": "0.1.0",
+  "private": true,
+  "description": "个人知识库：树状目录、文件上传与在线查看、全文检索（含 PDF 与中文），AI 可通过工具检索并针对文档对话。",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "lib",
+    "locale",
+    "docs",
+    "icon.svg"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "knowledge-base",
+    "rag",
+    "full-text-search"
+  ],
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
+  }
+}

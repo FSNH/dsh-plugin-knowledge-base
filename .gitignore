@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 运行时产物（正常情况下都在 $DSH_HOME/kb，这里只是防手滑）
+*.db
+*.db-wal
+*.db-shm
+*.preview.pdf
+*.pages/
+*.thumbs/

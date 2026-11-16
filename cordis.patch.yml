@@ -1,0 +1,18 @@
+# 个人知识库插件在 profile 插件树里的加载行。
+# id 是稳定标识（后续 patch 按 id 覆盖 config）；name 是包名。
+- insert:
+    - id: knowledge-base
+      name: 'dsh-plugin-knowledge-base'
+      config:
+        # 库文件根目录；留空用默认值 $DSH_HOME/kb
+        # root: 'D:\\我的资料\\dsh-kb'
+        root: ''
+        # 单个文件大小上限（字节），默认 64 MiB
+        maxFileBytes: 67108864
+        # 解析队列并发（1-2 比较稳妥）
+        parseConcurrency: 1
+        # 检索：关键词检索默认开启；向量检索默认关闭，需要填 OpenAI 兼容的 embeddings 接口
+        embedding:
+          enabled: false
+          baseUrl: ''
+          model: ''

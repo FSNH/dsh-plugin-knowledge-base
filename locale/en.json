@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "title": "Personal knowledge base",
+    "description": "Organize local files into a tree-shaped knowledge base: upload, read in the app, full-text search (PDF and Chinese included). The agent can search it and talk about a single document.",
+    "detail": "docs/DETAIL.md"
+  },
+  "knowledgeBase": {
+    "panel": "Knowledge base",
+    "panelTip": "Personal knowledge base",
+    "newKb": "New library",
+    "newFolder": "New folder",
+    "import": "Import files",
+    "search": "Search library",
+    "searchPlaceholder": "Search titles and text…",
+    "empty": "Nothing here yet. Drop files in, or create a library.",
+    "emptyKb": "This library is empty. Import files or drop them here.",
+    "emptySearch": "No match.",
+    "askAi": "Ask AI",
+    "reindex": "Reindex",
+    "remove": "Delete",
+    "rename": "Rename",
+    "openOriginal": "Original file",
+    "readable": "Read here",
+    "settings": "Knowledge base",
+    "root": "Storage folder",
+    "stats": "Statistics",
+    "rebuild": "Rebuild all indexes",
+    "indexing": "Indexing",
+    "ready": "Indexed",
+    "failed": "Failed",
+    "pending": "Pending"
+  }
+}

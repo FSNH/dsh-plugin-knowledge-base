@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "title": "个人知识库",
+    "description": "把本地文件整理成树状知识库：上传、在线查看、全文检索（含 PDF 与中文），AI 可以检索这些资料，也可以针对某一篇文档对话。",
+    "detail": "docs/DETAIL.md"
+  },
+  "knowledgeBase": {
+    "panel": "知识库",
+    "panelTip": "个人知识库",
+    "newKb": "新建知识库",
+    "newFolder": "新建文件夹",
+    "import": "导入文件",
+    "search": "搜索知识库",
+    "searchPlaceholder": "搜索标题或正文…",
+    "empty": "还没有内容。拖文件进来，或点「新建知识库」开始。",
+    "emptyKb": "这个知识库还是空的。点「导入文件」或把文件拖进来。",
+    "emptySearch": "没有找到匹配的内容。",
+    "askAi": "问 AI",
+    "reindex": "重新索引",
+    "remove": "删除",
+    "rename": "重命名",
+    "openOriginal": "原文件",
+    "readable": "在线阅读",
+    "settings": "知识库",
+    "root": "存放目录",
+    "stats": "统计",
+    "rebuild": "重建全部索引",
+    "indexing": "索引中",
+    "ready": "已索引",
+    "failed": "解析失败",
+    "pending": "等待解析"
+  }
+}
