@@ -71,23 +71,18 @@ dsh plugin --profile web add @fsnh/dsh-plugin-knowledge-base@0.1.0
 ### 1. 本地打包自测（不需要发布）
 
 ```powershell
-npm pack                     # 产出 dsh-plugin-knowledge-base-0.1.0.tgz（25 个文件，约 94 KB）
-dsh plugin --profile kbtest add .\dsh-plugin-knowledge-base-0.1.0.tgz
+npm pack                     # 产出 fsnh-dsh-plugin-knowledge-base-0.1.0.tgz（25 个文件，约 95 KB）
+dsh plugin --profile kbtest add .\fsnh-dsh-plugin-knowledge-base-0.1.0.tgz
 ```
 
-装完打开 `~/.dsh/profiles/kbtest/package.json`，应该能看到：
+装完打开 `~/.dsh/profiles/kbtest/package.json`，应该能看到包名被自动追加进 bundles：
 
 ```json
-"dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "dsh-plugin-knowledge-base"] } }
+"dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@fsnh/dsh-plugin-knowledge-base"] } }
 ```
 
-> ⚠️ **名字已被占用**：npm 上的 `dsh-plugin-knowledge-base` 是别人的包（2026-08-19，作者 zhengjialux）。发布前必须换名，改完 `package.json` 的 `name` **同时**要改 `cordis.patch.yml` 里那一行的 `name`：
->
-> ```powershell
-> npm pkg set name="@fsnh/dsh-plugin-knowledge-base"
-> ```
->
-> 已验证可用的备选名：`@fsnh/dsh-plugin-knowledge-base`、`dsh-plugin-kb`、`dsh-local-kb`。
+> **为什么包名带 `@fsnh/` 前缀**：npm 上的 `dsh-plugin-knowledge-base` 已经被别人的包占用（2026-08-19，作者 zhengjialux），所以发布名用作用域版本。
+> 仓库名仍叫 `dsh-plugin-knowledge-base`，两者不冲突；包名以 `package.json` 的 `name` 为准，并且 **`cordis.patch.yml` 里那一行的 `name` 必须与它完全一致**，否则 profile 合并 patch 时找不到包。
 
 ### 2. 发布
 
