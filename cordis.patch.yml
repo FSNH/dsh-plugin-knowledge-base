@@ -2,7 +2,7 @@
 # id 是稳定标识（后续 patch 按 id 覆盖 config）；name 是包名。
 - insert:
     - id: knowledge-base
-      name: 'dsh-plugin-knowledge-base'
+      name: '@fsnh/dsh-plugin-knowledge-base'
       config:
         # 库文件根目录；留空用默认值 $DSH_HOME/kb
         # root: 'D:\\我的资料\\dsh-kb'
