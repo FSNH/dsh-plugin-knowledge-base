@@ -4,12 +4,36 @@
 
 数据全在本机（默认 `~/.dsh/kb`），不经过任何云端。
 
+![界面示意图](docs/images/ui-overview.svg)
+
+<sub>界面示意图（跟随 DSH 主题与窗口宽度变化）</sub>
+
+## 它解决什么问题
+
+你在电脑里攒了一堆培训 PPT、会议纪要、登记资料、报价单——平时找一份东西要翻好几个文件夹，找到了还得自己读一遍。
+
+这个插件把它们组织成**树状目录**，然后给你两件事：
+
+1. **看得见原样**：点开就是 PPT/Word/Excel 的原始版式（不是抽出来的文字），左边缩略图栏点哪页跳哪页；
+2. **问得出来**：任何会话里问"我的资料里有没有关于 X 的"，模型会自己检索、读片段、带出处回答。
+
+## 三分钟上手
+
+```
+1. 装好插件 → 刷新页面 → 左栏点「知识库」
+2. 点「新建知识库」起个名字
+3. 点「导入文件」或把文件拖进来（解析在后台跑）
+4. 左栏点文件 → 右边直接看原版式
+```
+
+想跟文档对话：文档页点「✳ 问 AI」，提问会预填进会话输入框，你把问题补完发出去即可。
+
 ## 功能
 
-- **树状目录**：多知识库 / 文件夹 / 拖拽移动 / 重命名 / 删除；文件树栏可收起
-- **在线查看原版式**：Word、PPT、Excel 用本机 LibreOffice 转成 PDF，再逐页渲染成图片，由插件自己的阅读器显示（左侧缩略图栏 + 页码跳转 + 单页/连续 + 大屏放映）
+- **树状目录**：多知识库 / 文件夹 / 拖拽移动 / 重命名 / 删除；文件树栏可收起，阅读区随之变宽
+- **在线查看原版式**：Word、PPT、Excel 用本机 LibreOffice 转成 PDF，再逐页渲染成图片，由插件自己的阅读器显示（缩略图栏 + 页码跳转 + 单页/连续 + 大屏放映）
 - **全文检索**：SQLite FTS5，中英文混排，中文两字词也能命中（CJK 逐字归一化）
-- **AI 检索**：模型侧有三个工具 `kb_list` / `kb_search` / `kb_read`，任何会话里问"我的知识库里有没有…"都会自动用上
+- **AI 检索**：模型侧有三个工具 `kb_list` / `kb_search` / `kb_read`，任何会话里问"知识库里有没有…"都会自动用上
 - **针对文档对话**：「问 AI」把带 docId 的提问预填到会话输入框，模型先读文档再回答，并标注出处
 
 ## 安装
@@ -27,7 +51,7 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 装好后**刷新页面**，左栏会多一个「知识库」图标。
 
 > 依赖：`pdfjs-dist`（PDF 文字层抽取）。第一次装需要联网安装依赖。
-> Office 原版式预览依赖 DSH 自带的 LibreOffice（`officeKit`），没装也能用，只是 Office 文档只能看抽取出来的文字。
+> Office 原版式预览依赖 DSH 自带的 LibreOffice（`officeKit`）：没有它也能用，只是 Office 文档只能看抽取出来的文字。
 
 ## 使用
 
@@ -39,9 +63,21 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 | 移动到别的目录 | 把文件行拖到文件夹上，或用行上的「移动到…」 |
 | 收起文件树 | 顶部最左侧的箭头按钮（收起后左边留一条细条，点它展开） |
 | 看原版式 | 点文档 → 默认「原版式」；Word/PPT/Excel 第一次要等转换 |
+| 翻页 | 阅读器顶部 `‹ 4 / 123 ›` 直接跳页，或点左侧缩略图 |
 | 大屏放映 | 文档页「大屏」→ 单页铺满、← → 翻页、右上角「恢复」或 Esc 退出 |
 | 搜索 | 右上角搜索框，命中后点一条会跳到正文那一段并高亮 |
 | 问 AI | 文档页「问 AI」，提问会预填进会话输入框 |
+
+### 阅读器
+
+![大屏放映示意图](docs/images/ui-bigscreen.svg)
+
+- **缩略图栏**：点哪页跳哪页，当前页有描边；工具栏最左边的按钮可以收起它
+- **单页 / 连续**：单页像放映（整页装下、居中、不裁切），连续是滚动阅读
+- **大屏**：铺满整个窗口，`← →` / `PageUp PageDown` 翻页，`Esc` 或右上角「恢复」回面板
+- **文字版**：「原版式 / 文字」随时切换，文字版用于快速读、也是 AI 检索的来源
+
+> 桌面端不允许插件页面开新窗口（Electron 拦掉了 `target=_blank`），所以大屏是应用内全屏；要更大或用 PowerPoint 放映，用「下载」拿原件。
 
 ## AI 工具
 
@@ -51,7 +87,7 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 | `kb_search` | 全文检索，返回片段 + 定位 | `query`、`kbIds?`、`limit?`、`mode?` |
 | `kb_read` | 按字符偏移读正文（单次 ≤ 6000 字） | `docId`、`offset?`、`limit?` |
 
-库非空时会自动注入一段系统提示，告诉模型这套工具怎么用。
+库非空时会自动注入一段系统提示，告诉模型这套工具怎么用；库为空时什么都不加。
 
 ## 配置
 
@@ -82,7 +118,7 @@ $DSH_HOME/kb/
 
 - 插件不上传任何内容；只有开了向量检索才会把文本发给你指定的接口
 - 卸载插件**不会**删除这些文件
-- 页数多的文档会占几十 MB（123 页的 PPT 约 84 MB），设置页有「清理预览缓存」可随时清掉
+- 页数多的文档会占几十 MB（123 页约 84 MB），设置页有「清理预览缓存」可随时清掉
 
 ## 支持的格式
 
@@ -97,25 +133,11 @@ $DSH_HOME/kb/
 
 ## 架构
 
-```
-浏览器（插件 client.js）
-  ├─ sidebar.panellist  左栏图标
-  ├─ main[key]          知识库页面：树 + 阅读器 + 检索
-  └─ settings.section   设置分区
-        │ 同源 HTTP（x-kb-client 头 + 启动令牌）
-Host（index.js）
-  ├─ lib/store.mjs       SQLite：库/树/正文/分块
-  ├─ lib/extract.mjs     文本 / docx / pptx / xlsx 抽取（自研 ZIP+XML，零依赖）
-  ├─ lib/pdf.mjs         PDF 文字层（pdfjs-dist）
-  ├─ lib/chunker.mjs     渲染正文 + 分块
-  ├─ lib/index.mjs       FTS5（CJK 归一化）+ 可选向量（RRF 融合）
-  ├─ lib/pipeline.mjs    解析队列（上传即返回，后台解析）
-  ├─ lib/preview.mjs     officeKit → PDF → 逐页大图 / 缩略图
-  ├─ lib/routes.mjs      /api/kb/v1/*
-  └─ lib/tools.mjs       kb_list / kb_search / kb_read
-```
+![架构](docs/images/architecture.svg)
 
-设计过程与踩过的坑记在 [docs/DESIGN.md](docs/DESIGN.md)（含每一轮反馈的原因与改法）。
+一个插件的两半：浏览器侧只负责界面（三个插槽），所有读写/解析/索引都在 Host 进程里；两边只通过同源 HTTP 通信，Host 侧再落到本机 SQLite 和文件目录。AI 那一侧只注册三个只读工具 + 一段系统提示，不另造聊天窗——会话日志仍然是唯一真相。
+
+模块职责见 [lib/](lib/) 下的文件头注释；设计过程与踩过的坑记在 [docs/DESIGN.md](docs/DESIGN.md)（含每一轮反馈的原因与改法）。
 
 ## 开发与测试
 
@@ -136,8 +158,6 @@ $env:ELECTRON_RUN_AS_NODE=1
 $env:KB_TEST_DOCX = "C:\path\to\any.docx"
 $env:KB_TEST_XLSX = "C:\path\to\any.xlsx"
 ```
-
-两个套件都不依赖浏览器，Host 22 项、Client 70+ 项断言。
 
 > 用 DSH 自带的 Electron 可执行文件跑，是因为 `node:sqlite` 需要 Node 24（DSH 内置），系统 Node 可能没有。
 
