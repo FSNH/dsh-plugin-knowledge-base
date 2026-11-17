@@ -789,7 +789,7 @@ window.__ModuleLoader__.load({
 													}
 												},
 											}),
-											h('span', { className: 'dsh-kb-pageTotal' }, `/ ${officeInfo.pages}`),
+											h('span', { className: 'dsh-kb-pageTotal' }, `/ ${officeInfo.pageCount || officeInfo.pages}`),
 											h('button', {
 												type: 'button', className: 'dsh-kb-navBtn', title: '下一页',
 												disabled: pageNow >= officeInfo.pages, onClick: () => goPage(pageNow + 1),
@@ -942,7 +942,7 @@ window.__ModuleLoader__.load({
 					office && info
 						? h('span', { className: 'dsh-kb-bigNav' },
 							h('button', { type: 'button', className: 'dsh-kb-navBtn', title: '上一页', disabled: page <= 1, onClick: () => go(page - 1) }, '‹'),
-							h('span', { className: 'dsh-kb-pageTotal' }, `${page} / ${info.pages}`),
+							h('span', { className: 'dsh-kb-pageTotal' }, `${page} / ${info.pageCount || info.pages}`),
 							h('button', { type: 'button', className: 'dsh-kb-navBtn', title: '下一页', disabled: page >= info.pages, onClick: () => go(page + 1) }, '›'),
 							h('span', { className: 'dsh-kb-seg', role: 'group', 'aria-label': '显示方式' },
 								h('button', {
