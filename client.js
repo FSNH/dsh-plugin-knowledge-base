@@ -733,7 +733,8 @@ window.__ModuleLoader__.load({
 					? h('div', { className: 'dsh-kb-banner dsh-kb-banner--info' },
 						'这台机器没启用 Office 转换服务，只能看抽取出来的文字；「原文件」按钮可以用系统里的 Office 打开。')
 					: null,
-				current.previewError
+				// 预览失败的具体原因在下面那块里给（带按钮），这里不重复
+				current.previewError && !(current.previewInfo?.docId === doc.id && current.previewInfo?.error)
 					? h('div', { className: 'dsh-kb-banner dsh-kb-banner--bad', role: 'alert' },
 						h('Icon', { name: 'warn', size: 15 }),
 						h('span', null, current.previewError),
@@ -854,8 +855,10 @@ window.__ModuleLoader__.load({
 														: `共 ${officeInfo.pageCount || '?'} 页，这里只渲染了前 ${officeInfo.pages} 页。`)
 												: null))
 										: current.previewInfo?.docId === doc.id && current.previewInfo?.error
-											? h('div', { className: 'dsh-kb-pagesLoading' },
-												h('p', null, current.previewInfo.error),
+											? h('div', { className: 'dsh-kb-pagesLoading dsh-kb-pagesLoading--error' },
+												h('div', { className: 'dsh-kb-pagesErrorTitle' },
+													h(Icon, { name: 'warn', size: 16 }), '原版式预览用不了'),
+												h('p', { className: 'dsh-kb-pagesErrorText' }, current.previewInfo.error),
 												h('div', { className: 'dsh-kb-row2' },
 													h('button', {
 														type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
@@ -1830,6 +1833,9 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-thumb--on{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-thumbImg{display:block;width:100%;height:auto;border-radius:4px;background:#fff;}',
 				'.dsh-kb-thumbNo{position:absolute;right:3px;bottom:3px;padding:0 4px;border-radius:4px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:1.6;}',
+				'.dsh-kb-pagesLoading--error{gap:12px;}',
+				'.dsh-kb-pagesErrorTitle{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-pagesErrorText{margin:0;font-size:12.5px;color:var(--dsw-alias-label-secondary);line-height:1.6;max-width:560px;}',
 				'.dsh-kb-pagesLoading{flex:1;min-height:320px;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 24px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12.5px;line-height:1.6;background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-text{max-width:820px;font-size:13.5px;line-height:1.78;}',
 				'.dsh-kb-p{margin:0 0 10px;white-space:pre-wrap;word-break:break-word;}',
