@@ -597,20 +597,24 @@ window.__ModuleLoader__.load({
 			const current = useStore();
 			const doc = current.doc;
 			const pagesRef = React.useRef(null);
+			const partialTimer = React.useRef(null);
 			// Office 原版式：先让 Host 把每页渲染成图片，界面自己拼阅读器
 			React.useEffect(() => {
 				const target = state.doc;
 				if (!target || !OFFICE_EXT.includes(target.ext)) return undefined;
 				if (state.previewMode === 'text' || state.caps?.officePreview === false) return undefined;
-				if (state.previewInfo?.docId === target.id) return undefined;
+				if (state.previewInfo?.docId === target.id && !state.previewInfo?.partial) return undefined;
 				let cancelled = false;
+				let tries = 0;
 				const timer = setTimeout(() => {
 					if (!cancelled && state.previewInfo?.docId !== target.id) {
-						patch({ previewError: '页面渲染超过 90 秒还没好；可以点「新窗口」看 PDF，或切到「文字」。' });
+						patch({ previewError: '页面渲染超过 90 秒还没好；可以切到「文字版」，或「下载」原件。' });
 					}
 				}, 90000);
-				api(`/doc?id=${encodeURIComponent(target.id)}&action=previewinfo`)
-					.then((data) => {
+
+				const fetchInfo = async () => {
+					try {
+						const data = await api(`/doc?id=${encodeURIComponent(target.id)}&action=previewinfo`);
 						if (cancelled) return;
 						patch({
 							previewInfo: {
@@ -618,18 +622,30 @@ window.__ModuleLoader__.load({
 								pages: data.pages,
 								pageCount: data.pageCount,
 								truncated: Boolean(data.truncated),
+								partial: Boolean(data.partial),
 								width: data.width,
 								height: data.height,
 							},
 							previewError: '',
 						});
-					})
-					.catch((error) => {
+						// 首屏几页出来了、后面的还在后台补：过几秒再问一次
+						if (data.partial && tries < 20) {
+							tries += 1;
+							partialTimer.current = setTimeout(fetchInfo, 3000);
+						}
+					} catch (error) {
 						if (cancelled) return;
 						const message = error.message || '预览生成失败';
 						patch({ previewInfo: { docId: target.id, error: message }, previewError: message });
-					});
-				return () => { cancelled = true; clearTimeout(timer); };
+					}
+				};
+
+				fetchInfo();
+				return () => {
+					cancelled = true;
+					clearTimeout(timer);
+					if (partialTimer.current) clearTimeout(partialTimer.current);
+				};
 			}, [doc?.id, current.previewMode]);
 			if (!doc) {
 				if (current.kbs.length === 0) {
@@ -831,13 +847,29 @@ window.__ModuleLoader__.load({
 													alt: `${doc.name} 第 ${page} 页`,
 												}),
 												h('span', { className: 'dsh-kb-pageNo' }, page))),
-											officeInfo.truncated
+											officeInfo.truncated || officeInfo.partial
 												? h('div', { className: 'dsh-kb-pagesNote' },
-													`共 ${officeInfo.pageCount || '?'} 页，这里只渲染了前 ${officeInfo.pages} 页；看完整版请点「新窗口」。`)
+													officeInfo.partial
+														? `已生成 ${officeInfo.pages} / 共 ${officeInfo.pageCount || '?'} 页，后面的页面正在后台渲染，稍等几秒会自动出现。`
+														: `共 ${officeInfo.pageCount || '?'} 页，这里只渲染了前 ${officeInfo.pages} 页。`)
 												: null))
-										: h('div', { className: 'dsh-kb-pagesLoading' },
-											h('span', { className: 'dsh-kb-spinner', 'aria-hidden': 'true' }),
-											'正在渲染页面…第一次打开会慢一些，之后是缓存。'))
+										: current.previewInfo?.docId === doc.id && current.previewInfo?.error
+											? h('div', { className: 'dsh-kb-pagesLoading' },
+												h('p', null, current.previewInfo.error),
+												h('div', { className: 'dsh-kb-row2' },
+													h('button', {
+														type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+														onClick: () => patch({ previewMode: 'text' }),
+													}, '看文字版'),
+													h('button', {
+														type: 'button', className: 'dsh-kb-btn',
+														onClick: () => {
+															patch({ previewInfo: null, previewError: '' });
+														},
+													}, '重试')))
+											: h('div', { className: 'dsh-kb-pagesLoading' },
+												h('span', { className: 'dsh-kb-spinner', 'aria-hidden': 'true' }),
+												'正在渲染页面…第一次打开会慢一些，之后是缓存。'))
 								: h('div', { className: 'dsh-kb-text' }, renderText(current.docText, current.query)),
 					!officeVisual && doc.ext !== 'pdf' && !isImage(doc.ext) && current.docHasMore
 						? h('button', {
