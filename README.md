@@ -336,7 +336,21 @@ $env:KB_TEST_XLSX = "C:\path\to\any.xlsx"
 
 - 老版 Office（`.doc/.ppt/.xls`）能看原版式，但不抽正文，搜不到里面的字
 - 扫描件 PDF / 纯图片没有文字层，搜不到内容
-- 转换上限：单文件 **50 MB**（超过会直接提示「超过 Office 转换上限」，十几毫秒就返回，不会卡在那里转圈）；单次渲图 200 页
+- **原版式转换受 DSH 的 office-kit 限制**，默认 `maxInputBytes = 50 MB`。超过时不是卡住，而是立刻提示原因（可切「文字版」或「下载」）。
+  想放宽：在 profile 的 `cordis.patch.yml` 里给 office-kit 加一段配置（`maxInputBytes` 必须 ≤ `maxSourceBytes`）：
+
+  ```yaml
+  - id: office-kit
+    name: "@deepseek-ai/dsh-office-kit"
+    config:
+      maxInputBytes: 209715200
+      maxSourceBytes: 314572800
+      maxOutputBytes: 314572800
+      timeoutMs: 300000
+  ```
+
+  本机没装原生 LibreOffice 时走的是 **WASM 引擎**：57 MB 的 PPT 实测转换约 **58 秒**，再大只会更慢，所以放宽上限主要适合"偶尔一个大文件"。
+- 单次渲图最多 200 页
 - 桌面端不允许插件页面开新窗口，所以「大屏」是应用内全屏，不是独立窗口
 
 ## License
