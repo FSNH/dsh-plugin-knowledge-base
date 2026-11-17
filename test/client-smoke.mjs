@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // Client 半部的"能不能渲染出来"冒烟测试（不依赖浏览器）。
 //
 // 目的：在没有浏览器控制通道的情况下，至少证明
@@ -383,6 +383,7 @@ pane = renderPage();
 check('设置面板渲染出来', pane.some((node) => String(node.props?.className).includes('dsh-kb-settingsPane')));
 check('设置里有存放目录', pane.some((node) => String(node.props?.children || '').includes('存放目录')));
 check('设置里有索引状态', pane.some((node) => String(node.props?.children || '').includes('索引状态')));
+check('设置里有图片理解配置', pane.some((node) => String(node.props?.children || '').includes('图片理解（可选）')));
 const back = pane.find((node) => node.type === 'button' && String(node.props?.children || '').includes('返回'));
 check('有返回按钮', Boolean(back));
 

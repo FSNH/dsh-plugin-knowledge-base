@@ -1330,6 +1330,12 @@ window.__ModuleLoader__.load({
 			const [probing, setProbing] = React.useState(false);
 			const [probe, setProbe] = React.useState(null);
 			const [formNotice, setFormNotice] = React.useState('');
+			// 图片理解（视觉模型）那一块自己的表单状态
+			const [visionForm, setVisionForm] = React.useState(null);
+			const [visionSaving, setVisionSaving] = React.useState(false);
+			const [visionProbing, setVisionProbing] = React.useState(false);
+			const [visionProbe, setVisionProbe] = React.useState(null);
+			const [visionNotice, setVisionNotice] = React.useState('');
 			const [rebuilding, setRebuilding] = React.useState(false);
 			const watchRef = React.useRef(null);
 
@@ -1370,10 +1376,63 @@ window.__ModuleLoader__.load({
 				if (!state.loaded) loadState();
 				let cancelled = false;
 				api('/settings')
-					.then((data) => { if (!cancelled) setForm({ ...data.embedding, apiKey: '' }); })
-					.catch(() => { if (!cancelled) setForm({ enabled: false, baseUrl: '', model: '', apiKey: '', hasKey: false, keyTail: '' }); });
+					.then((data) => {
+						if (cancelled) return;
+						setForm({ ...data.embedding, apiKey: '' });
+						setVisionForm({ ...(data.vision || { enabled: false, baseUrl: '', model: '' }), apiKey: '' });
+					})
+					.catch(() => {
+						if (cancelled) return;
+						setForm({ enabled: false, baseUrl: '', model: '', apiKey: '', hasKey: false, keyTail: '' });
+						setVisionForm({ enabled: false, baseUrl: '', model: '', apiKey: '', hasKey: false, keyTail: '' });
+					});
 				return () => { cancelled = true; };
 			}, []);
+
+			const saveVision = async () => {
+				if (!visionForm || visionSaving) return;
+				setVisionSaving(true);
+				setVisionNotice('');
+				try {
+					const data = await api('/settings', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({
+							vision: {
+								enabled: Boolean(visionForm.enabled),
+								baseUrl: visionForm.baseUrl,
+								model: visionForm.model,
+								apiKey: visionForm.apiKey,
+							},
+						}),
+					});
+					setVisionForm({ ...(data.vision || {}), apiKey: '' });
+					setVisionNotice('已保存，立即生效');
+					await loadState(state.kbId, true);
+				} catch (error) {
+					setVisionNotice(`保存失败：${error.message || error}`);
+				} finally {
+					setVisionSaving(false);
+				}
+			};
+
+			const testVision = async () => {
+				if (!visionForm || visionProbing) return;
+				setVisionProbing(true);
+				setVisionProbe(null);
+				try {
+					const data = await api('/vision-test', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ baseUrl: visionForm.baseUrl, model: visionForm.model, apiKey: visionForm.apiKey }),
+					});
+					setVisionProbe(data.probe || { ok: false, error: '没有返回结果' });
+				} catch (error) {
+					setVisionProbe({ ok: false, error: error.message || String(error) });
+				} finally {
+					setVisionProbing(false);
+				}
+			};
 
 			const saveEmbedding = async () => {
 				if (!form || saving) return;
@@ -1539,6 +1598,72 @@ window.__ModuleLoader__.load({
 					embedding?.enabled
 						? h('p', { className: 'dsh-kb-hint' }, `当前状态：已启用 · 模型 ${embedding.model} · 检索时与关键词结果融合（RRF）`)
 						: null),
+				// ── 图片理解（视觉模型）──────────────────────────────────────
+				h('section', { className: 'dsh-kb-card' },
+					h('h4', null, '图片理解（可选）'),
+					h('p', { className: 'dsh-kb-hint' },
+						'图片本身没有文字，所以默认搜不到。打开这里，上传或重建时会用视觉模型把图「描述成文字」，再走同一套关键词 + 向量检索 —— 命中后 AI 也能读出图里写了什么。'),
+					visionForm
+						? h('div', { className: 'dsh-kb-form' },
+							h('label', { className: 'dsh-kb-check' },
+								h('input', {
+									type: 'checkbox',
+									checked: Boolean(visionForm.enabled),
+									onChange: (event) => setVisionForm({ ...visionForm, enabled: event.target.checked }),
+								}),
+								'启用图片理解'),
+							h('label', { className: 'dsh-kb-field' },
+								h('span', { className: 'dsh-kb-label' }, '接口地址'),
+								h('input', {
+									type: 'text',
+									value: visionForm.baseUrl || '',
+									placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+									onChange: (event) => setVisionForm({ ...visionForm, baseUrl: event.target.value }),
+								}),
+								h('span', { className: 'dsh-kb-hint' }, '和向量检索一样填到 /v1 为止')),
+							h('label', { className: 'dsh-kb-field' },
+								h('span', { className: 'dsh-kb-label' }, '视觉模型'),
+								h('input', {
+									type: 'text',
+									value: visionForm.model || '',
+									placeholder: 'qwen3-vl-plus',
+									onChange: (event) => setVisionForm({ ...visionForm, model: event.target.value }),
+								}),
+								h('span', { className: 'dsh-kb-hint' }, '百炼用 qwen3-vl-plus；OpenAI 用 gpt-4o-mini 也行')),
+							h('label', { className: 'dsh-kb-field' },
+								h('span', { className: 'dsh-kb-label' }, 'API Key'),
+								h('input', {
+									type: 'password',
+									value: visionForm.apiKey || '',
+									placeholder: visionForm.hasKey
+										? `已保存（尾号 ${visionForm.keyTail}），留空表示不改`
+										: '留空则复用向量检索那把 Key',
+									onChange: (event) => setVisionForm({ ...visionForm, apiKey: event.target.value }),
+								})),
+							h('div', { className: 'dsh-kb-row2' },
+								h('button', {
+									type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+									onClick: saveVision, disabled: visionSaving,
+								}, visionSaving ? '保存中…' : '保存'),
+								h('button', {
+									type: 'button', className: 'dsh-kb-btn',
+									onClick: testVision, disabled: visionProbing,
+								}, visionProbing ? '测试中…' : '测试连接')),
+							visionProbe
+								? h('div', { className: cx('dsh-kb-banner', visionProbe.ok ? 'dsh-kb-banner--ok' : 'dsh-kb-banner--bad'), role: 'status' },
+									visionProbe.ok
+										? `连接成功：${visionProbe.model} · ${visionProbe.ms} ms · 返回「${visionProbe.sample || ''}…」`
+										: `连接失败：${visionProbe.error}`)
+								: null,
+							visionNotice ? h('p', { className: 'dsh-kb-hint' }, visionNotice) : null,
+							visionForm.enabled && !current.caps?.vision?.enabled
+								? h('p', { className: 'dsh-kb-hint' }, '已勾选但还没生效：检查接口地址和模型，保存后这里会显示「已启用」。')
+								: null)
+						: h('p', { className: 'dsh-kb-hint' }, '读取配置中…'),
+					current.caps?.vision?.enabled
+						? h('p', { className: 'dsh-kb-hint' },
+							`当前状态：已启用 · 模型 ${current.caps.vision.model} · 新建或重建索引时会把图片描述成文字`)
+						: h('p', { className: 'dsh-kb-hint' }, '当前状态：未启用（图片只能看，搜不到）')),
 				current.error
 					? h('p', { className: 'dsh-kb-banner dsh-kb-banner--bad', role: 'alert' }, current.error)
 					: null,

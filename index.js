@@ -18,6 +18,7 @@ import { createPipeline } from './lib/pipeline.mjs';
 import { createPreviewer } from './lib/preview.mjs';
 import { createKnowledgeBaseTools } from './lib/tools.mjs';
 import { createSettingsStore } from './lib/settings.mjs';
+import { createVisionClient } from './lib/vision.mjs';
 import { createRoutes } from './lib/routes.mjs';
 
 export const name = 'dsh-knowledge-base';
@@ -57,16 +58,30 @@ export function apply(ctx, config = {}) {
 
 	const embedder = createEmbedder({ resolve: resolveEmbedding, logger });
 	const index = createIndex({ store, embedder });
+
+	// 图片理解（视觉模型）：把图描述成文字再索引，优先级同样 settings.json > YAML
+	const resolveVision = () => {
+		if (settings.hasSaved('vision')) {
+			const saved = settings.vision();
+			// 没单独填 key 时复用嵌入那个（通常同一个服务商）
+			const embeddingKey = settings.hasSaved() ? settings.embedding().apiKey : (config.embedding?.apiKey ?? '');
+			return { ...saved, apiKey: saved.apiKey || embeddingKey };
+		}
+		const base = config.vision ?? {};
+		return { enabled: Boolean(base.enabled), baseUrl: base.baseUrl ?? '', model: base.model ?? '', apiKey: base.apiKey ?? '' };
+	};
+	const vision = createVisionClient({ resolve: resolveVision, logger });
+
 	// Office 原版式预览要用宿主的 officeKit（LibreOffice 转换），它可能比本插件晚加载，
 	// 所以用 getter 在调用时取。
 	const previewer = createPreviewer({ store, getOfficeKit: () => ctx.get('officeKit'), logger });
-	const pipeline = createPipeline({ store, index, embedder, logger, config, previewer });
+	const pipeline = createPipeline({ store, index, embedder, vision, logger, config, previewer });
 
 	// ── HTTP 路由 ──────────────────────────────────────────────────────────
 	// 二进制预览（<img>/<iframe>）带不了自定义头，给它一条带启动令牌的通道。
 	const token = crypto.randomUUID();
 	const { routes } = createRoutes({
-		store, index, pipeline, embedder, settings, config, logger, webServer, token, previewer,
+		store, index, pipeline, embedder, vision, settings, config, logger, webServer, token, previewer,
 	});
 	for (const route of routes) {
 		ctx.effect(() => webServer.register(route), `knowledge-base: ${route.path}`);
