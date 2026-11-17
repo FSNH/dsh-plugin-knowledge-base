@@ -177,12 +177,19 @@ git push origin v0.1.0
      → 当正文存起来 → 切块 → 关键词 + 向量 → 可被搜索、可被 AI 读取
 ```
 
-**怎么开**：知识库页面 → 右上角**齿轮** → 「图片理解（可选）」→ 填 Key（留空则复用向量检索那把）→ 勾选启用 → **测试连接** → 保存 → 点「重建全部索引」给已有图片补描述。
+**怎么开**：知识库页面 → 右上角**齿轮** → 「图片理解（可选）」→ 选**服务商**（自动填好地址和模型，也可以选「自定义」手填）→ 填 Key（留空则复用向量检索那把）→ 勾选启用 → **测试连接** → 保存 → 点「重建全部索引」给已有图片补描述。
 
-| 服务 | 接口地址 | 视觉模型 |
+内置预设（选完自动填地址 + 模型）：
+
+| 服务商 | 接口地址 | 视觉模型 |
 |---|---|---|
 | 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen3-vl-plus` |
+| 硅基流动 | `https://api.siliconflow.cn/v1` | `Qwen/Qwen2.5-VL-72B-Instruct` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| 本机 Ollama | `http://127.0.0.1:11434/v1` | `qwen2.5vl:7b` |
+| 自定义 | 任意 `POST /chat/completions` 的 OpenAI 兼容端点 | 自己填 |
+
+> 只要求两点：`POST <baseUrl>/chat/completions` 能收 OpenAI 格式的 `messages`，且支持 `{"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}`。满足就能用，不限于上表。
 
 几点说明：
 
@@ -190,6 +197,7 @@ git push origin v0.1.0
 - 每张图一次模型调用（图片会发给该服务商，注意这一点）
 - 单次转换失败会在文档状态里留下原因（比如 `图片理解接口报错：HTTP 401`），修好后点「重建」重试
 - 只对 `png / jpg / jpeg / gif / webp / bmp` 生效；扫描件 PDF 仍按「没有文字层」处理（可以把页面截成图再上传）
+- 想确认这台机器配的服务真的能用：	est/vision-live.mjs 会**真实请求一次**（默认跳过，需要 KB_TEST_LIVE=1）
 
 ## AI 工具
 
@@ -304,6 +312,11 @@ $env:ELECTRON_RUN_AS_NODE=1
 
 # 向量检索链路：自带一个假 embeddings 服务，验证写入向量 + hybrid 检索 + 接口挂了降级
 & "<DeepSeek Harness.exe>" test/vector.mjs
+
+# 真实视觉联调（可选，会真的调一次接口并产生费用）
+$env:KB_TEST_LIVE = "1"
+& "<DeepSeek Harness.exe>" test/vision-live.mjs [可选:图片路径]
+$env:KB_TEST_LIVE = ""
 
 # 密钥扫描：确认仓库里没有 API Key / 私钥 / token（提交前跑一下）
 & "<DeepSeek Harness.exe>" test/no-secrets.mjs

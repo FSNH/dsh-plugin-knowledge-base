@@ -1336,6 +1336,7 @@ window.__ModuleLoader__.load({
 			const [visionProbing, setVisionProbing] = React.useState(false);
 			const [visionProbe, setVisionProbe] = React.useState(null);
 			const [visionNotice, setVisionNotice] = React.useState('');
+			const [visionPresets, setVisionPresets] = React.useState([]);
 			const [rebuilding, setRebuilding] = React.useState(false);
 			const watchRef = React.useRef(null);
 
@@ -1380,6 +1381,7 @@ window.__ModuleLoader__.load({
 						if (cancelled) return;
 						setForm({ ...data.embedding, apiKey: '' });
 						setVisionForm({ ...(data.vision || { enabled: false, baseUrl: '', model: '' }), apiKey: '' });
+						setVisionPresets(Array.isArray(data.visionPresets) ? data.visionPresets : []);
 					})
 					.catch(() => {
 						if (cancelled) return;
@@ -1613,14 +1615,40 @@ window.__ModuleLoader__.load({
 								}),
 								'启用图片理解'),
 							h('label', { className: 'dsh-kb-field' },
+								h('span', { className: 'dsh-kb-label' }, '服务商'),
+								h('select', {
+									className: 'dsh-kb-select',
+									value: visionForm.preset || 'dashscope',
+									onChange: (event) => {
+										const id = event.target.value;
+										const preset = visionPresets.find((item) => item.id === id);
+										if (!preset) return;
+										setVisionForm({
+											...visionForm,
+											preset: id,
+											baseUrl: preset.baseUrl || visionForm.baseUrl,
+											model: preset.model || visionForm.model,
+										});
+									},
+								}, (visionPresets.length ? visionPresets : [{ id: 'dashscope', label: '阿里云百炼' }, { id: 'custom', label: '自定义' }])
+									.map((preset) => h('option', { key: preset.id, value: preset.id }, preset.label))),
+								h('span', { className: 'dsh-kb-hint' },
+									(visionPresets.find((item) => item.id === visionForm.preset) || {}).hint
+									|| '选一个服务商，接口地址和模型会自动填好；也可以选「自定义」手填')),
+							h('label', { className: 'dsh-kb-field' },
 								h('span', { className: 'dsh-kb-label' }, '接口地址'),
 								h('input', {
 									type: 'text',
 									value: visionForm.baseUrl || '',
 									placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-									onChange: (event) => setVisionForm({ ...visionForm, baseUrl: event.target.value }),
+									onChange: (event) => {
+										const value = event.target.value;
+										const normalized = value.trim().replace(/\/+$/, '');
+										const matched = visionPresets.find((item) => item.baseUrl && item.baseUrl === normalized);
+										setVisionForm({ ...visionForm, baseUrl: value, preset: matched ? matched.id : 'custom' });
+									},
 								}),
-								h('span', { className: 'dsh-kb-hint' }, '和向量检索一样填到 /v1 为止')),
+								h('span', { className: 'dsh-kb-hint' }, '和向量检索一样填到 /v1 为止（自定义端点也行，只要兼容 /chat/completions）')),
 							h('label', { className: 'dsh-kb-field' },
 								h('span', { className: 'dsh-kb-label' }, '视觉模型'),
 								h('input', {

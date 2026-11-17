@@ -12,7 +12,7 @@ import path from 'node:path';
 import { openStore } from '../lib/store.mjs';
 import { createEmbedder, createIndex } from '../lib/index.mjs';
 import { createPipeline } from '../lib/pipeline.mjs';
-import { createVisionClient } from '../lib/vision.mjs';
+import { createVisionClient, VISION_PRESETS, presetOf } from '../lib/vision.mjs';
 
 const failures = [];
 function check(name, condition, detail = '') {
@@ -81,6 +81,14 @@ check('测试连接成功', probe.ok === true, JSON.stringify(probe));
 check('请求里带了图片', seen[0]?.hasImage === true, JSON.stringify(seen[0]));
 check('请求带了鉴权头', String(seen[0]?.auth).startsWith('Bearer '), String(seen[0]?.auth));
 
+console.log('\n[1b] 服务商预设');
+check('预设里有百炼', VISION_PRESETS.some((item) => item.id === 'dashscope'), JSON.stringify(VISION_PRESETS.map((item) => item.id)));
+check('预设里有「自定义」', VISION_PRESETS.some((item) => item.id === 'custom'));
+check('每个预设都有 label', VISION_PRESETS.every((item) => typeof item.label === 'string' && item.label.length > 0));
+check('能按地址认出百炼', presetOf('https://dashscope.aliyuncs.com/compatible-mode/v1') === 'dashscope');
+check('能按地址认出 OpenAI', presetOf('https://api.openai.com/v1') === 'openai');
+check('未知地址归为自定义', presetOf('https://my-own-vl.example.com/v1') === 'custom');
+check('空地址归为默认百炼', presetOf('') === 'dashscope');
 console.log('\n[2] 图片进流水线 → 变成可检索的正文');
 store.createKb({ id: 'k_img0001', name: '图片测试库', now: Date.now() });
 const docId = 'd_img0001';
