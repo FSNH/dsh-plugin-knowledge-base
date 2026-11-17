@@ -1,5 +1,8 @@
 # DSH 个人知识库插件
 
+[![npm](https://img.shields.io/npm/v/@xiaofanzhao/dsh-plugin-knowledge-base)](https://www.npmjs.com/package/@xiaofanzhao/dsh-plugin-knowledge-base)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 把本地文件整理成树状知识库，在 DeepSeek Harness 里直接读、直接搜，AI 也能检索并针对某一篇文档对话。
 
 数据全在本机（默认 `~/.dsh/kb`），不经过任何云端。
@@ -51,6 +54,8 @@ dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 ```powershell
 dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 ```
+
+已发布在 npm：[`@xiaofanzhao/dsh-plugin-knowledge-base`](https://www.npmjs.com/package/@xiaofanzhao/dsh-plugin-knowledge-base)
 
 一条命令就够：它会把包装进 profile、把包名写进 `dsh.profile.bundles`，profile 启动时再合并包内自带的 `cordis.patch.yml`。**不需要手改任何 profile 文件**。
 
