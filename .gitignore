@@ -27,3 +27,6 @@ id_rsa*
 
 # npm pack 产物
 *.tgz
+
+# 本地 npm 缓存
+.npm-cache/

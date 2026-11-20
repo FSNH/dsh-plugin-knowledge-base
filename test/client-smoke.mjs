@@ -84,8 +84,13 @@ vm.createContext(sandbox);
 vm.runInContext(source, sandbox, { filename: 'client.js' });
 
 console.log('\n[1] 模块注册');
+// DSH 的 client-modules 用「包名」当模块表的键：__ModuleLoader__.load 收到的 id
+// 必须等于 package.json 的 name，否则 arrive() 查不到，界面整体不挂载
+// （报错：loaded without registering "…" via __ModuleLoader__.load）。
+const packageName = JSON.parse(fs.readFileSync(path.resolve(here, '../package.json'), 'utf8')).name;
 check('调用了 __ModuleLoader__.load', Boolean(captured));
-check('id 与包名一致', captured?.id === 'dsh-plugin-knowledge-base', String(captured?.id));
+check('id 等于 package.json 的 name', captured?.id === packageName, `${captured?.id} !== ${packageName}`);
+check('id 不是裸名', captured?.id !== packageName.split('/').pop(), String(captured?.id));
 
 const factory = captured?.factory;
 check('factory 是函数', typeof factory === 'function');

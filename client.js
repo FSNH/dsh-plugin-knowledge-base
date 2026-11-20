@@ -10,7 +10,9 @@
 // 不能出现 import / export。React 从模块表里拿：require('react')。
 // ============================================================================
 window.__ModuleLoader__.load({
-	id: 'dsh-plugin-knowledge-base',
+	// 必须等于 package.json 的 name：client-modules 用「包名」做模块表的键，
+	// 这里写成裸名会让 factory 注册到别处、arrive() 永远查不到（loaded without registering）。
+	id: '@xiaofanzhao/dsh-plugin-knowledge-base',
 	factory(require) {
 		const React = require('react');
 		const h = React.createElement;
