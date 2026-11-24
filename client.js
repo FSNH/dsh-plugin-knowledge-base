@@ -1199,13 +1199,22 @@ window.__ModuleLoader__.load({
 				patch({ examPicked: kept.length ? kept : ids });
 			}, [current.kbId, (current.nodes || []).length]);
 
+			/** 404 基本都是"服务端还在跑旧代码"——说清楚，别让人以为是功能坏了。 */
+			const friendly = (err) => {
+				const message = String(err?.message || err || '');
+				if (/HTTP 404|找不到|not found/i.test(message)) {
+					return '插件服务端还是旧版本：请完全退出 DeepSeek Harness 再重新打开（只刷新页面不够）';
+				}
+				return message || '出错了';
+			};
+
 			async function loadTopics() {
 				setBusy((value) => value || '正在读…');
 				try {
 					const data = await api('/exam/topics');
 					setTopics(data.topics || []);
 				} catch (err) {
-					setError(err.message || '读取学习主题失败');
+					setError(friendly(err));
 					setTopics([]);
 				} finally { setBusy(''); }
 			}
@@ -1227,7 +1236,7 @@ window.__ModuleLoader__.load({
 					sessionStarter(data.prompt);
 					setNotice('已打开会话：和 AI 把目标和大纲谈定，它会把结果写回知识库');
 				} catch (err) {
-					setError(err.message || '开会话失败');
+					setError(friendly(err));
 				} finally { setBusy(''); }
 			}
 
@@ -1242,7 +1251,7 @@ window.__ModuleLoader__.load({
 					sessionStarter(data.prompt);
 					setNotice('已把考官 prompt 放进会话输入框，按回车开始');
 				} catch (err) {
-					setError(err.message || '打不开会话');
+					setError(friendly(err));
 				}
 			}
 
