@@ -509,7 +509,8 @@ console.log('\n[9] 对练面板');
 	check('步骤条有 5 步', stepNodes.length === 5, `实际 ${stepNodes.length}`);
 	check('有一句话说明勾选规则', exam.some((node) => String(node.props?.children || '').includes('全选等于整库')));
 	check('工具条有全选/反选/清空', ['全选', '反选', '清空'].every((label) => exam.some((node) => String(node.props?.children || '') === label)));
-	check('面板里能换知识库', exam.some((node) => String(node.props?.className || '').includes('dsh-kb-examKb')));
+	check('范围跟着左侧树走（不再单独放下拉）', exam.some((node) => String(node.props?.children || '').includes('左边已选'))
+		&& !exam.some((node) => String(node.props?.className || '').includes('dsh-kb-examKb')));
 	check('底部有预估计数与开始按钮', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examFoot')
 		&& exam.some((node) => String(node.props?.children || '') === '开始分析'));
 	internals.patch({ examOpen: false });

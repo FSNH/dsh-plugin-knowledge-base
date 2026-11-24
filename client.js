@@ -1126,7 +1126,8 @@ window.__ModuleLoader__.load({
 		function Exam() {
 			const current = useStore();
 			const [step, setStep] = React.useState('setup');
-			const [kbId, setKbId] = React.useState(current.kbId || '');
+			// 知识库不在面板里单独存：直接跟着左侧树（同一份 store）
+			const kbId = current.kbId || '';
 			const [objectives, setObjectives] = React.useState([]);
 			const [objective, setObjective] = React.useState('');
 			const [picked, setPicked] = React.useState(-1);
@@ -1147,7 +1148,6 @@ window.__ModuleLoader__.load({
 			const inputRef = React.useRef(null);
 
 			React.useEffect(() => () => { try { abortRef.current?.abort(); } catch { /* ignore */ } }, []);
-			React.useEffect(() => { if (current.kbId && !kbId) setKbId(current.kbId); }, [current.kbId]);
 			// 范围跟随左侧树：换库或文档增减时，默认勾选当前库的全部文档
 			React.useEffect(() => {
 				const ids = (current.nodes || []).filter((node) => node.kind === 'doc').map((node) => node.id);
@@ -1226,7 +1226,7 @@ window.__ModuleLoader__.load({
 			}
 
 			async function suggest() {
-				if (!kbId) { setError('先选一个知识库'); return; }
+				if (!current.kbId) { setError('先在左边选一个知识库'); return; }
 				const docsAllSelected = (current.nodes || []).filter((node) => node.kind === 'doc').every((node) => docIds.includes(node.id));
 				setError(''); setBusy('正在读这个库…');
 				try {
@@ -1335,12 +1335,12 @@ window.__ModuleLoader__.load({
 			// ① 选库
 			if (step === 'setup') {
 				const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
-				const kbName = current.kbs.find((item) => item.id === kbId)?.name ?? '未选库';
+				const kbName = current.kbs.find((item) => item.id === current.kbId)?.name ?? '（左边还没选库）';
 				const picked = docs.filter((doc) => docIds.includes(doc.id));
 				const pickedChars = picked.reduce((sum, doc) => sum + (doc.chars || 0), 0);
 				const totalChars = docs.reduce((sum, doc) => sum + (doc.chars || 0), 0);
 				const allSelected = docs.length > 0 && picked.length === docs.length;
-				const canStart = picked.length > 0;
+				const canStart = Boolean(current.kbId) && picked.length > 0;
 				const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
 				const byParent = buildTree(current.nodes || []);
 
@@ -1411,20 +1411,10 @@ window.__ModuleLoader__.load({
 					stepsBar,
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
+						// 知识库不再单独放一个下拉：范围跟着左边树走
 						h('div', { className: 'dsh-kb-examHead' },
 							h('div', { className: 'dsh-kb-examTitle' }, '选对练范围'),
-							h('span', { className: 'dsh-kb-viewerGrow' }),
-							h('select', {
-								className: 'dsh-kb-select dsh-kb-examKb',
-								value: kbId,
-								title: '换知识库（左边文件树会跟着切）',
-								onChange: (event) => {
-									const nextKb = event.target.value;
-									setKbId(nextKb);
-									setDocIds([]);
-									if (nextKb && nextKb !== current.kbId) loadState(nextKb);
-								},
-							}, current.kbs.map((item) => h('option', { key: item.id, value: item.id }, item.name)))),
+							h('span', { className: 'dsh-kb-examScopeLabel' }, `左边已选：${kbName}`)),
 						h('div', { className: 'dsh-kb-examPickerBar' },
 							h('span', { className: 'dsh-kb-examPickerCount' },
 								`已选 ${picked.length} / ${docs.length} 篇${allSelected ? '（整库）' : ''}`),
@@ -1439,11 +1429,13 @@ window.__ModuleLoader__.load({
 							}, '反选'),
 							h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
 						h('div', { className: 'dsh-kb-examDocs dsh-kb-examDocs--tree' },
-							docs.length === 0
-								? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
-								: treeRows),
+							!current.kbId
+								? h('p', { className: 'dsh-kb-hint' }, '先在左边选一个知识库。')
+								: docs.length === 0
+									? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
+									: treeRows),
 						h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
-							`勾文件或文件夹都可以；全选等于整库对练（${kbName}）。`),
+							'右上角的下拉也能换库；勾文件或文件夹都可以，全选等于整库对练。'),
 						h('div', { className: cx('dsh-kb-examModel', diag && diag.ready === false && 'dsh-kb-examModel--bad') },
 							h(Icon, { name: diag && diag.ready === false ? 'warn' : 'spark', size: 13 }),
 							h('span', null, diag === null
