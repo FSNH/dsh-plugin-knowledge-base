@@ -1397,7 +1397,10 @@ window.__ModuleLoader__.load({
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								onClick: () => { setView('scope'); setError(''); setNotice(''); },
 							}, '新建学习主题'))
-						: h('div', { className: 'dsh-kb-topicList', style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+						: h('div', {
+							className: 'dsh-kb-topicList',
+							style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px', alignItems: 'stretch' },
+						},
 							list.map(card)));
 
 				// 右列只在点了「对练记录」之后才存在，默认不占位、不空着
