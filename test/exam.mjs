@@ -258,6 +258,91 @@ console.log('\n[6] kb_exam_log 工具');
 	const bad = await log.execute({ action: 'turn', runId: 'rn_nope', question: 'x' });
 	check('runId 不存在时返回失败而不是崩', bad.ok === false && typeof bad.summary === 'string', JSON.stringify(bad));
 }
+console.log('\n[7] 刷题模式：出题 prompt + 题库');
+{
+	const topic = exam.saveTopic({
+		kbId,
+		docIds: ['d_a'],
+		objective: '刷题用例主题',
+		outline: [{ id: 'kp1', title: '识别' }],
+		blueprint: [{ kpId: 'kp1', turns: 4, difficulty: 'discern' }],
+		totalTurns: 8,
+	});
+
+	const quiz = exam.quizPrompt(topic.id);
+	check('quiz prompt 要求单选多选', quiz.prompt.includes('单选题') && quiz.prompt.includes('多选题'));
+	check('quiz prompt 一次一题', quiz.prompt.includes('一次只出一题'));
+	check('quiz prompt 要求存题库', quiz.prompt.includes('kb_quiz_save'));
+	check('quiz prompt 标明题量', quiz.prompt.includes('总共 8 题'), quiz.prompt.match(/总共 \d+ 题/)?.[0]);
+	check('quiz 带 mode 标记', quiz.mode === 'quiz');
+
+	const one = exam.saveQuizItem({
+		topicId: topic.id,
+		kpTitle: '识别',
+		stem: '叶片出现梭形病斑，中央灰白，最可能是？',
+		options: [
+			{ key: 'A', text: '大斑病' },
+			{ key: 'B', text: '纹枯病' },
+			{ key: 'C', text: '锈病' },
+			{ key: 'D', text: '黑穗病' },
+		],
+		answer: ['A'],
+		explanation: '梭形病斑是典型症状；锈病是锈色孢子堆。',
+	});
+	check('题目入库', one.id.startsWith('qz_'), one.id);
+	check('不重复入库', exam.saveQuizItem({
+		topicId: topic.id,
+		stem: '叶片出现梭形病斑，中央灰白，最可能是？',
+		options: [{ key: 'A', text: '大斑病' }, { key: 'B', text: '纹枯病' }],
+		answer: ['A'],
+	}).duplicate === true);
+
+	const multi = exam.saveQuizItem({
+		topicId: topic.id,
+		stem: '以下哪些措施能降低发病？',
+		options: [
+			{ key: 'A', text: '轮作' },
+			{ key: 'B', text: '密植' },
+			{ key: 'C', text: '抗病品种' },
+		],
+		answer: ['A', 'C'],
+		explanation: '轮作与抗病品种有效，密植会加重。',
+	});
+	const items = exam.listQuizItems(topic.id);
+	check('题库能列出两题', items.length === 2, String(items.length));
+	check('多选题答案保留两个', items.find((item) => item.id === multi.id)?.answer.length === 2);
+	check('选项带 key', items[0].options[0].key === 'A');
+
+	const badAnswer = (() => { try { exam.saveQuizItem({ topicId: topic.id, stem: 'x', options: [{ key: 'A', text: 'a' }, { key: 'B', text: 'b' }], answer: ['Z'] }); return false; } catch { return true; } })();
+	check('答案不在选项里会被拒', badAnswer);
+	const noOptions = (() => { try { exam.saveQuizItem({ topicId: topic.id, stem: 'y', options: [{ key: 'A', text: 'a' }], answer: ['A'] }); return false; } catch { return true; } })();
+	check('选项少于一题两选会被拒', noOptions);
+}
+
+console.log('\n[8] kb_quiz_save 工具');
+{
+	const tools = createKnowledgeBaseTools({ store, index, pipeline: { enqueue() {} }, exam });
+	const save = tools.find((item) => item.name === 'kb_quiz_save');
+	check('注册了 kb_quiz_save', Boolean(save));
+
+	const topic = exam.saveTopic({
+		kbId, docIds: [], objective: '工具刷题用例',
+		outline: [{ id: 'kp1', title: '甲' }], blueprint: [], totalTurns: 4,
+	});
+	const result = await save.execute({
+		topicId: topic.id,
+		kpTitle: '甲',
+		stem: '工具保存的题？',
+		options: [{ key: 'A', text: '对' }, { key: 'B', text: '错' }],
+		answer: ['A'],
+		explanation: '因为对',
+	});
+	check('工具能存题', result.ok === true && result.itemId.startsWith('qz_'), JSON.stringify(result));
+	check('题库里能看到', exam.listQuizItems(topic.id).length === 1);
+
+	const bad = await save.execute({ topicId: topic.id, stem: '', options: [], answer: [] });
+	check('缺参数不崩', bad.ok === false && typeof bad.summary === 'string');
+}
 store.close();
 fs.rmSync(root, { recursive: true, force: true });
 

@@ -1207,6 +1207,9 @@ window.__ModuleLoader__.load({
 			const [runs, setRuns] = React.useState([]);
 			const [openedRun, setOpenedRun] = React.useState(null);
 			const [openItems, setOpenItems] = React.useState([]);
+			// 右侧栏显示哪个：对练记录 or 题库
+			const [sideView, setSideView] = React.useState('runs');
+			const [quizItems, setQuizItems] = React.useState([]);
 			const [recordFor, setRecordFor] = React.useState(null);
 			const [sideWidth, setSideWidth] = React.useState(430);
 			const [sideFull, setSideFull] = React.useState(false);
@@ -1283,8 +1286,19 @@ window.__ModuleLoader__.load({
 			}
 
 			async function toggleRuns(topic) {
+
+			async function toggleQuiz(topic) {
+				if (recordFor?.id === topic.id && sideView === 'quiz') { setRecordFor(null); setQuizItems([]); return; }
+				setRecordFor(topic); setSideView('quiz'); setQuizItems([]); setOpenedRun(null); setSideFull(false);
+				try {
+					const data = await api(`/exam/quiz?topicId=${encodeURIComponent(topic.id)}`);
+					setQuizItems(data.items || []);
+				} catch (err) {
+					setError(friendly(err));
+				}
+			}
 				if (recordFor?.id === topic.id) { setRecordFor(null); setRuns([]); setOpenedRun(null); return; }
-				setRecordFor(topic); setRuns([]); setOpenedRun(null); setSideFull(false);
+				setRecordFor(topic); setSideView('runs'); setRuns([]); setOpenedRun(null); setSideFull(false);
 				try {
 					const data = await api(`/exam/runs?topicId=${encodeURIComponent(topic.id)}`);
 					setRuns(data.runs || []);
@@ -1318,10 +1332,10 @@ window.__ModuleLoader__.load({
 				}
 			}
 
-			async function startChat(topic) {
+			async function startChat(topic, mode) {
 				setError('');
 				try {
-					const data = await api(`/exam/topic/prompt?id=${encodeURIComponent(topic.id)}`);
+					const data = await api(`/exam/topic/prompt?id=${encodeURIComponent(topic.id)}&mode=${mode === 'quiz' ? 'quiz' : 'spar'}`);
 					if (typeof sessionStarter !== 'function') {
 						setError('会话服务还没就绪，稍后再点一次');
 						return;
@@ -1417,15 +1431,12 @@ window.__ModuleLoader__.load({
 				};
 
 				// 卡片统一高度：默认只显示 2 行标题 + 一行元信息，大纲等细节收进「详情」
+				// 卡片统一高度：默认只显示 2 行标题 + 一行元信息，大纲等细节收进「详情」
 				const card = (topic) => {
 					const open = detailFor === topic.id;
 					return h('div', { key: topic.id, className: 'dsh-kb-topic' },
 						h('div', { className: 'dsh-kb-topicHead' },
-							h('div', {
-							className: 'dsh-kb-topicTitle dsh-kb-clamp2',
-							onMouseEnter: (event) => showTip(event, topic.objective),
-							onMouseLeave: hideTip,
-						}, topic.objective)),
+							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2', title: topic.objective }, topic.objective)),
 						h('div', { className: 'dsh-kb-topicMeta' },
 							`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
 						open
@@ -1440,16 +1451,26 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'dsh-kb-topicFoot' },
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-								onClick: () => startChat(topic),
-							}, '开始 AI 对练'),
+								onClick: () => startChat(topic, 'spar'),
+								title: '一问一答，AI 追问、点评、给达成判定',
+							}, 'AI 对练'),
+							h('button', {
+								type: 'button', className: 'dsh-kb-btn',
+								onClick: () => startChat(topic, 'quiz'),
+								title: '单选/多选为主，判完对错顺手存进题库',
+							}, '刷题'),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
 								onClick: () => setDetailFor(open ? '' : topic.id),
 							}, open ? '收起详情' : '详情'),
 							h('button', {
-								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && 'dsh-kb-examMini--on'),
+								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && sideView === 'runs' && 'dsh-kb-examMini--on'),
 								onClick: () => toggleRuns(topic),
-							}, recordFor?.id === topic.id ? '关闭记录' : '对练记录'),
+							}, '对练记录'),
+							h('button', {
+								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && sideView === 'quiz' && 'dsh-kb-examMini--on'),
+								onClick: () => toggleQuiz(topic),
+							}, '题库'),
 							h('span', { className: 'dsh-kb-viewerGrow' }),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
@@ -1490,6 +1511,28 @@ window.__ModuleLoader__.load({
 							list.map(card)));
 
 				// 右列只在点了「对练记录」之后才存在，默认不占位、不空着
+				// 右列：对练记录 / 题库，二选一显示；默认不存在
+				const quizBody = quizItems.length === 0
+					? h('div', { className: 'dsh-kb-runEmpty' },
+						h('p', { className: 'dsh-kb-hint' }, '这个主题还没有刷过题。'),
+						h('p', { className: 'dsh-kb-hint' }, '点卡片上的「刷题」，AI 每判完一题会调用 kb_quiz_save 存进这里。'))
+					: h('div', { className: 'dsh-kb-quizList' },
+						quizItems.map((item) => h('div', { key: item.id, className: 'dsh-kb-quizItem' },
+							h('div', { className: 'dsh-kb-quizHead' },
+								h('span', { className: 'dsh-kb-quizKind' }, item.answer.length > 1 ? '多选' : '单选'),
+								item.kpTitle ? h('span', { className: 'dsh-kb-runKp' }, item.kpTitle) : null,
+								h('span', { className: 'dsh-kb-viewerGrow' }),
+								h('span', { className: 'dsh-kb-quizAnswer' }, `答案 ${item.answer.join('')}`)),
+							h('div', { className: 'dsh-kb-quizStem' }, item.stem),
+							h('div', { className: 'dsh-kb-quizOptions' },
+								item.options.map((opt) => h('div', {
+									key: opt.key,
+									className: cx('dsh-kb-quizOption', item.answer.includes(opt.key) && 'dsh-kb-quizOption--right'),
+								},
+									h('span', { className: 'dsh-kb-quizKey' }, opt.key),
+									h('span', null, opt.text)))),
+							item.explanation ? h('div', { className: 'dsh-kb-quizWhy' }, item.explanation) : null)));
+
 				const rightColumn = !recordFor ? null : h('div', {
 					className: 'dsh-kb-examSide',
 					style: sideFull
@@ -1499,8 +1542,8 @@ window.__ModuleLoader__.load({
 					sideFull ? null : h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
 					h('div', { className: 'dsh-kb-examSideInner', style: { display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 } },
 						h('div', { className: 'dsh-kb-examSideHead' },
-							h('div', { className: 'dsh-kb-examTitle' }, '对练记录'),
-							h('span', { className: 'dsh-kb-examScopeLabel' }, `${runs.length} 次`),
+							h('div', { className: 'dsh-kb-examTitle' }, sideView === 'quiz' ? '题库' : '对练记录'),
+							h('span', { className: 'dsh-kb-examScopeLabel' }, sideView === 'quiz' ? `${quizItems.length} 题` : `${runs.length} 次`),
 							h('span', { className: 'dsh-kb-viewerGrow' }),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
@@ -1509,26 +1552,28 @@ window.__ModuleLoader__.load({
 							}, sideFull ? '退出全屏' : '全屏'),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); setSideFull(false); },
+								onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); setQuizItems([]); setSideFull(false); },
 								title: '关闭',
 							}, h(Icon, { name: 'close', size: 12 }))),
 						h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
-						runs.length === 0
-							? h('div', { className: 'dsh-kb-runEmpty' },
-								h('p', { className: 'dsh-kb-hint' }, '这个主题还没有对练记录。'),
-								h('p', { className: 'dsh-kb-hint' }, '点「开始 AI 对练」，每答完一题 AI 会调用 kb_exam_log 记下来；'),
-								h('p', { className: 'dsh-kb-hint' }, '如果刚练过却没有记录，多半是会话里没调那个工具。'))
-							: h('div', { className: 'dsh-kb-runList' },
-								runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
-									h('button', {
-										type: 'button',
-										className: cx('dsh-kb-runHead', openedRun?.id === run.id && 'dsh-kb-runHead--on'),
-										onClick: () => openRun(run),
-									},
-										h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
-										h('span', { className: 'dsh-kb-runMeta' },
-											`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}${run.summary ? ' · 有报告' : ''}`)),
-									runDetail(run))))));
+						sideView === 'quiz'
+							? quizBody
+							: runs.length === 0
+								? h('div', { className: 'dsh-kb-runEmpty' },
+									h('p', { className: 'dsh-kb-hint' }, '这个主题还没有对练记录。'),
+									h('p', { className: 'dsh-kb-hint' }, '点「AI 对练」或「刷题」，每答完一题 AI 会记下来；'),
+									h('p', { className: 'dsh-kb-hint' }, '如果刚练过却没有记录，多半是会话里没调那个工具。'))
+								: h('div', { className: 'dsh-kb-runList' },
+									runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
+										h('button', {
+											type: 'button',
+											className: cx('dsh-kb-runHead', openedRun?.id === run.id && 'dsh-kb-runHead--on'),
+											onClick: () => openRun(run),
+										},
+											h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
+											h('span', { className: 'dsh-kb-runMeta' },
+												`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}${run.summary ? ' · 有报告' : ''}`)),
+										runDetail(run))))));
 				const tipLayer = !tip ? null : h('div', {
 					className: 'dsh-kb-tip',
 					style: { left: tip.left + 'px', top: tip.top + 'px', transform: tip.above ? 'translateY(-100%)' : 'none' },
@@ -2575,6 +2620,18 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-rpDot{flex:none;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-rpLabel{flex:none;color:var(--dsw-alias-label-primary);font-weight:500;}',
 				'.dsh-kb-rpText{min-width:0;word-break:break-word;}',
+				'.dsh-kb-quizList{display:flex;flex-direction:column;gap:10px;}',
+				'.dsh-kb-quizItem{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-quizItem:last-child{border-bottom:none;}',
+				'.dsh-kb-quizHead{display:flex;align-items:center;gap:6px;}',
+				'.dsh-kb-quizKind{flex:none;padding:1px 7px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-quizAnswer{flex:none;font-size:11.5px;font-weight:600;color:#2da44e;}',
+				'.dsh-kb-quizStem{font-size:12.5px;line-height:1.65;color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-quizOptions{display:flex;flex-direction:column;gap:3px;}',
+				'.dsh-kb-quizOption{display:flex;gap:7px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary);padding:2px 6px;border-radius:6px;}',
+				'.dsh-kb-quizOption--right{background:rgba(35,134,54,.14);color:#2da44e;font-weight:500;}',
+				'.dsh-kb-quizKey{flex:none;font-weight:600;}',
+				'.dsh-kb-quizWhy{font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-secondary);padding:6px 8px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
