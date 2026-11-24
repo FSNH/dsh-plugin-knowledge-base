@@ -1339,7 +1339,7 @@ window.__ModuleLoader__.load({
 					const open = detailFor === topic.id;
 					return h('div', { key: topic.id, className: 'dsh-kb-topic' },
 						h('div', { className: 'dsh-kb-topicHead' },
-							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2' }, topic.objective)),
+							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2', title: topic.objective }, topic.objective)),
 						h('div', { className: 'dsh-kb-topicMeta' },
 							`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
 						open
