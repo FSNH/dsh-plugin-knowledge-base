@@ -222,6 +222,43 @@ console.log('\n[6] 范围：只考选中的文件');
 	try { await exam.start({ kbId, objective: 'x', docIds: ['d_not_exist'] }); } catch { threw = true; }
 	check('范围全都不存在时报错而不是退化成整库', threw);
 }
+console.log('\n[7] 模型不按 JSON 输出时的兜底');
+{
+	const replies = [];
+	const scripted = async ({ purpose }) => {
+		if (purpose !== 'objectives') throw new Error('这一步不该调用模型');
+		return replies.shift() ?? '';
+	};
+	const exam2 = createExam({ store, index, chat: scripted, logger: { warn() {}, error() {} } });
+
+	// ① 先说人话，重试后给 JSON
+	replies.push('好的，我先看看这个库里都有什么。');
+	replies.push('{"objectives":[{"text":"能区分两种病害","why":"两篇文档覆盖","coverage":"high"}]}');
+	const retried = await exam2.suggestObjectives({ kbId });
+	check('解析失败会自动重试一次', retried.length === 1 && retried[0].text.includes('两种病害'), JSON.stringify(retried));
+
+	// ② 包在代码块里也能解析
+	replies.length = 0;
+	replies.push('\u0060\u0060\u0060json\n{"objectives":[{"text":"能说出用药顺序","coverage":"medium"}]}\n\u0060\u0060\u0060');
+	const fenced = await exam2.suggestObjectives({ kbId });
+	check('代码块里的 JSON 能取出来', fenced.length === 1 && fenced[0].text.includes('用药顺序'), JSON.stringify(fenced));
+
+	// ③ 字符串里带花括号，不能被截断
+	replies.length = 0;
+	replies.push('{"objectives":[{"text":"能解释 {安全间隔} 的含义","coverage":"low"}]}');
+	const braces = await exam2.suggestObjectives({ kbId });
+	check('字符串里的花括号不影响解析', braces.length === 1 && braces[0].text.includes('{安全间隔}'), JSON.stringify(braces));
+
+	// ④ 一直不说 JSON：报错里要带上模型原话
+	replies.length = 0;
+	replies.push('抱歉，我无法完成。');
+	replies.push('我真的不会输出 JSON。');
+	let message = '';
+	try { await exam2.suggestObjectives({ kbId }); } catch (error) { message = String(error?.message ?? ''); }
+	check('连续失败会报错', message.length > 0);
+	check('错误里带上模型原话', message.includes('无法完成') || message.includes('不会输出'), message);
+}
+
 store.close();
 fs.rmSync(root, { recursive: true, force: true });
 
