@@ -1460,10 +1460,6 @@ window.__ModuleLoader__.load({
 								title: '单选/多选为主，判完对错顺手存进题库',
 							}, '刷题'),
 							h('button', {
-								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => setDetailFor(open ? '' : topic.id),
-							}, open ? '收起详情' : '详情'),
-							h('button', {
 								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && sideView === 'runs' && 'dsh-kb-examMini--on'),
 								onClick: () => toggleRuns(topic),
 							}, '对练记录'),
@@ -1472,6 +1468,10 @@ window.__ModuleLoader__.load({
 								onClick: () => toggleQuiz(topic),
 							}, '题库'),
 							h('span', { className: 'dsh-kb-viewerGrow' }),
+							h('button', {
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => setDetailFor(open ? '' : topic.id),
+							}, open ? '收起详情' : '详情'),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
 								onClick: () => removeTopic(topic),
