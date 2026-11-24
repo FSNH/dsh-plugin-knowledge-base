@@ -1422,7 +1422,7 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'dsh-kb-examTitle' }, '第 2 步 · 定目标')),
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, '练完要能做到什么？Pick 一个候选，或者自己写。'),
+						h('p', { className: 'dsh-kb-examLead' }, '练完要能整体做到什么？三条候选覆盖不同侧重，挑一个或自己写——目标要能覆盖多个知识点，别写成单个事实。'),
 						candidates.map((item, index) => h('button', {
 							key: index,
 							type: 'button',
@@ -1430,6 +1430,10 @@ window.__ModuleLoader__.load({
 							onClick: () => setObjective(item.text),
 						},
 							h('span', { className: 'dsh-kb-examObjText' }, item.text),
+							item.points?.length
+								? h('span', { className: 'dsh-kb-examObjPoints' },
+									item.points.map((point, i) => h('span', { key: i, className: 'dsh-kb-examObjPoint' }, point)))
+								: null,
 							h('span', { className: 'dsh-kb-examObjMeta' },
 								`${item.coverage === 'high' ? '覆盖度高' : item.coverage === 'low' ? '覆盖度低' : '覆盖度中'}${item.why ? ` · ${item.why}` : ''}`))),
 						h('label', { className: 'dsh-kb-examField dsh-kb-examField--stack' },
@@ -2440,6 +2444,8 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-outlineInput{flex:1;min-width:0;height:28px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:12.5px;}',
 				'.dsh-kb-outlineInput:focus{outline:none;border-color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-outlineMeta{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examObjPoints{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}',
+				'.dsh-kb-examObjPoint{padding:1px 7px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);font-size:11px;color:var(--dsw-alias-label-secondary);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();

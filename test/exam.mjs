@@ -237,6 +237,11 @@ console.log('\n[7] 模型不按 JSON 输出时的兜底');
 	const retried = await exam2.suggestObjectives({ kbId });
 	check('解析失败会自动重试一次', retried.length === 1 && retried[0].text.includes('两种病害'), JSON.stringify(retried));
 
+	// ①-2 目标要带知识点列表（"整体目标"而不是单点事实）
+	replies.length = 0;
+	replies.push('{"objectives":[{"text":"能向客户完整介绍这套方案","points":["公司定位","规模数据","产品矩阵"],"why":"三篇文档覆盖","coverage":"high"}]}');
+	const withPoints = await exam2.suggestObjectives({ kbId });
+	check('目标带 points', Array.isArray(withPoints[0]?.points) && withPoints[0].points.length === 3, JSON.stringify(withPoints[0]?.points));
 	// ② 包在代码块里也能解析
 	replies.length = 0;
 	replies.push('\u0060\u0060\u0060json\n{"objectives":[{"text":"能说出用药顺序","coverage":"medium"}]}\n\u0060\u0060\u0060');
