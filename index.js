@@ -21,7 +21,6 @@ import { createSettingsStore } from './lib/settings.mjs';
 import { createVisionClient } from './lib/vision.mjs';
 import { createRoutes } from './lib/routes.mjs';
 import { createExam } from './lib/exam/engine.mjs';
-import { createExamChat } from './lib/exam/chat.mjs';
 
 export const name = 'dsh-knowledge-base';
 export const inject = ['webServer'];
@@ -82,25 +81,13 @@ export function apply(ctx, config = {}) {
 	// ── HTTP 路由 ──────────────────────────────────────────────────────────
 	// 二进制预览（<img>/<iframe>）带不了自定义头，给它一条带启动令牌的通道。
 	const token = crypto.randomUUID();
-	// 对练引擎：模型走宿主 llm 服务。
-	// 不能直接 ctx.get('llm')——插件没 inject llm 时取不到，对练就会一直报"没有可用的模型"。
-	// 这里先用懒注入拿到服务，拿不到再退回 getter（宿主没挂 llm 时给出明确提示）。
-	let llmService = null;
-	const safeLlm = () => {
-		if (llmService) return llmService;
-		try { return ctx.get('llm') ?? null; } catch { return null; }
-	};
-	const examChat = createExamChat({ getLlm: safeLlm, logger });
-	const exam = createExam({ store, index, chat: examChat.chat, logger });
-	if (typeof ctx.inject === 'function') {
-		ctx.inject(['llm'], (llmCtx) => {
-			llmService = llmCtx.llm ?? (typeof llmCtx.get === 'function' ? llmCtx.get('llm') : null) ?? null;
-			logger.info?.(`[knowledge-base] 对练已接入模型服务：${llmService ? 'ok' : 'null'}`);
-		});
-	}
+	// 对练引擎：只存/取学习主题。
+	// 定目标、拆大纲、出题、点评都在 DSH 会话里做（agent 用工具读库、用 kb_topic_save 落库），
+	// 所以这里不注入 llm，也不调模型。
+	const exam = createExam({ store, logger });
 
 	const { routes } = createRoutes({
-		store, index, pipeline, embedder, vision, settings, config, logger, webServer, token, previewer, exam, examDiag: examChat.diag,
+		store, index, pipeline, embedder, vision, settings, config, logger, webServer, token, previewer, exam,
 	});
 	for (const route of routes) {
 		ctx.effect(() => webServer.register(route), `knowledge-base: ${route.path}`);
