@@ -1169,7 +1169,6 @@ window.__ModuleLoader__.load({
 			const [topics, setTopics] = React.useState(null);
 			const [busy, setBusy] = React.useState('');
 			const [error, setError] = React.useState('');
-			const [diag, setDiag] = React.useState(null);
 			const [notice, setNotice] = React.useState('');
 
 			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
@@ -1179,19 +1178,6 @@ window.__ModuleLoader__.load({
 			const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
 			const picked = docs.filter((doc) => docIds.includes(doc.id));
 			const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
-
-			React.useEffect(() => {
-				let alive = true;
-				(async () => {
-					try {
-						const data = await api('/exam/diag');
-						if (alive) setDiag(data);
-					} catch (err) {
-						if (alive) setDiag({ ready: false, message: err.message || '自检失败' });
-					}
-				})();
-				return () => { alive = false; };
-			}, []);
 
 			React.useEffect(() => {
 				const ids = (current.nodes || []).filter((node) => node.kind === 'doc').map((node) => node.id);
@@ -1287,13 +1273,6 @@ window.__ModuleLoader__.load({
 					h('button', { type: 'button', className: 'dsh-kb-bannerClose', onClick: () => setNotice('') },
 						h(Icon, { name: 'close', size: 12 })))
 				: null;
-			const modelLine = h('div', { className: cx('dsh-kb-examModel', diag && diag.ready === false && 'dsh-kb-examModel--bad') },
-				h(Icon, { name: diag && diag.ready === false ? 'warn' : 'spark', size: 13 }),
-				h('span', null, diag === null
-					? '正在检查模型…'
-					: diag.ready !== false
-						? `思考用模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
-						: `模型不可用：${diag.message ?? '原因未知'}（会话里可以换一个）`));
 
 			// ① 卡片列表
 			if (view === 'list') {
@@ -1370,7 +1349,6 @@ window.__ModuleLoader__.load({
 					h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
 						'下一步不在面板里做：会打开一个会话，AI 自己读这些文档，和你把学习目标与大纲谈定（题量默认 10 题，可以在对话里改）、写回知识库；'
 						+ '存好后它可以直接在同一个会话里开练，也可以之后回这里点卡片上的「开始 AI 对练」。'),
-					modelLine,
 					h('div', { className: 'dsh-kb-examFoot' },
 						h('span', { className: 'dsh-kb-examFootHint' }, `将用 ${picked.length} 篇 · ${size(picked.reduce((sum, doc) => sum + (doc.chars || 0), 0))}`),
 						h('button', {
