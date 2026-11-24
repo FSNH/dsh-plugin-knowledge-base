@@ -274,6 +274,8 @@ console.log('\n[8] 学习主题：对话设计 + 落库');
 	check('design prompt 要求先确认再保存', design.prompt.includes('确认'));
 	check('保存后默认在当前会话开练', design.prompt.includes('直接就在这里当考官'));
 	check('允许"先存着"', design.prompt.includes('先存着'));
+	check('用点选确认而不是打字', design.prompt.includes('ask_user_question'));
+	check('确认选项包含"写入知识库并开始"', design.prompt.includes('写入知识库并开始'));
 
 	const saved = exam.saveTopic({
 		kbId,
