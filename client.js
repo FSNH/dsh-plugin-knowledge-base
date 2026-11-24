@@ -1448,36 +1448,39 @@ window.__ModuleLoader__.load({
 									? h('p', { className: 'dsh-kb-hint' }, `考 ${topic.docIds.length} 篇文档`)
 									: h('p', { className: 'dsh-kb-hint' }, '考整库'))
 							: null,
-						h('div', { className: 'dsh-kb-topicFoot' },
-							h('button', {
-								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-								onClick: () => startChat(topic, 'spar'),
-								title: '一问一答，AI 追问、点评、给达成判定',
-							}, 'AI 对练'),
-							h('button', {
-								type: 'button', className: 'dsh-kb-btn',
-								onClick: () => startChat(topic, 'quiz'),
-								title: '单选/多选为主，判完对错顺手存进题库',
-							}, '刷题'),
-							h('button', {
-								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && sideView === 'runs' && 'dsh-kb-examMini--on'),
-								onClick: () => toggleRuns(topic),
-							}, '对练记录'),
-							h('button', {
-								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && sideView === 'quiz' && 'dsh-kb-examMini--on'),
-								onClick: () => toggleQuiz(topic),
-							}, '题库'),
-							h('span', { className: 'dsh-kb-viewerGrow' }),
-							h('button', {
-								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => setDetailFor(open ? '' : topic.id),
-							}, open ? '收起详情' : '详情'),
-							h('span', { className: 'dsh-kb-divider' }),
-							h('button', {
-								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => removeTopic(topic),
-								title: '删除这个学习主题（不动文档）',
-							}, '删除')));
+				h('div', { className: 'dsh-kb-topicFoot' },
+					h('div', { className: 'dsh-kb-btnGroup' },
+						h('button', {
+							type: 'button', className: 'dsh-kb-gBtn dsh-kb-gBtn--primary',
+							onClick: () => startChat(topic, 'spar'),
+							title: '一问一答，AI 追问、点评、给达成判定',
+						}, 'AI 对练'),
+						h('button', {
+							type: 'button', className: 'dsh-kb-gBtn',
+							onClick: () => startChat(topic, 'quiz'),
+							title: '单选/多选为主，判完对错顺手存进题库',
+						}, '刷题')),
+					h('div', { className: 'dsh-kb-btnGroup' },
+						h('button', {
+							type: 'button',
+							className: cx('dsh-kb-gBtn', recordFor?.id === topic.id && sideView === 'runs' && 'dsh-kb-gBtn--on'),
+							onClick: () => toggleRuns(topic),
+						}, '对练记录'),
+						h('button', {
+							type: 'button',
+							className: cx('dsh-kb-gBtn', recordFor?.id === topic.id && sideView === 'quiz' && 'dsh-kb-gBtn--on'),
+							onClick: () => toggleQuiz(topic),
+						}, '题库'),
+						h('button', {
+							type: 'button', className: 'dsh-kb-gBtn',
+							onClick: () => setDetailFor(open ? '' : topic.id),
+						}, open ? '收起' : '详情')),
+					h('span', { className: 'dsh-kb-viewerGrow' }),
+					h('button', {
+						type: 'button', className: 'dsh-kb-gBtn dsh-kb-gBtn--danger',
+						onClick: () => removeTopic(topic),
+						title: '删除这个学习主题（不动文档）',
+					}, '删除')));
 				};
 
 				const leftColumn = h('div', {
@@ -2634,6 +2637,16 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-quizKey{flex:none;font-weight:600;}',
 				'.dsh-kb-quizWhy{font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-secondary);padding:6px 8px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-divider{flex:none;width:1px;height:18px;background:var(--dsw-alias-border-l1);margin:0 2px;}',
+				'.dsh-kb-topicFoot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:8px;margin-top:auto;padding-top:8px;}',
+				'.dsh-kb-btnGroup{display:inline-flex;align-items:center;flex:none;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;overflow:hidden;}',
+				'.dsh-kb-gBtn{height:28px;padding:0 12px;border:none;border-radius:0;background:transparent;color:inherit;font:inherit;font-size:12px;line-height:1;cursor:pointer;white-space:nowrap;}',
+				'.dsh-kb-btnGroup .dsh-kb-gBtn + .dsh-kb-gBtn{border-left:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-btnGroup .dsh-kb-gBtn:hover{background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-gBtn--on{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-brand,#1f6feb);font-weight:600;}',
+				'.dsh-kb-gBtn--primary{background:var(--dsw-alias-label-brand,#1f6feb);color:#fff;}',
+				'.dsh-kb-gBtn--primary:hover{filter:brightness(1.08);}',
+				'.dsh-kb-gBtn--danger{flex:none;height:28px;padding:0 12px;border:1px solid transparent;border-radius:9px;background:transparent;color:#cf222e;font:inherit;font-size:12px;cursor:pointer;}',
+				'.dsh-kb-gBtn--danger:hover{border-color:#cf222e;background:rgba(207,34,46,.10);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
