@@ -503,16 +503,14 @@ console.log('\n[9] 对练面板');
 	// 切到对练：第一步是选库，且不抛错
 	internals.patch({ examOpen: true, kbs: [{ id: 'k1', name: '我的资料库', docs: 3 }], kbId: 'k1' });
 	const exam = renderPage();
-	check('对练第一步渲染「开始分析」', exam.some((node) => String(node.props?.children || '') === '开始分析'));
+	check('学习主题空态有「新建学习主题」', exam.some((node) => String(node.props?.children || '') === '新建学习主题'));
 	// 容器 class 是 dsh-kb-examSteps，步骤本身是 dsh-kb-examStep（后面可能跟 --on/--done）
 	const stepNodes = exam.filter((node) => /^dsh-kb-examStep(\s|$)/.test(String(node.props?.className || '')));
-	check('步骤条有 5 步', stepNodes.length === 5, `实际 ${stepNodes.length}`);
-	check('说明勾选在左侧完成', exam.some((node) => String(node.props?.children || '').includes('在左边文件树里勾选')));
-	check('工具条有全选/反选/清空', ['全选', '反选', '清空'].every((label) => exam.some((node) => String(node.props?.children || '') === label)));
-	check('右侧只回显（没有勾选框列表）', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examPicks')
-		&& !exam.some((node) => String(node.props?.className || '').includes('dsh-kb-examKb')));
-	check('底部有预估计数与开始按钮', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examFoot')
-		&& exam.some((node) => String(node.props?.children || '') === '开始分析'));
+	check('改成三步向导后不再有旧步骤条', !exam.some((node) => String(node.props?.className || '').includes('dsh-kb-examStep')));
+	// 向导第一步在点击「新建学习主题」后才渲染，这里只验证入口存在
+	check('入口按钮可点', exam.some((node) => String(node.props?.className || '').includes('dsh-kb-btn--primary')));
+	check('不再有独立的知识库下拉', !exam.some((node) => String(node.props?.className || '').includes('dsh-kb-examKb')));
+	check('空态文案说明怎么建', exam.some((node) => String(node.props?.children || '').includes('还没有学习主题')));
 	internals.patch({ examOpen: false });
 }
 

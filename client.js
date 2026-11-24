@@ -1159,51 +1159,31 @@ window.__ModuleLoader__.load({
 		let sessionStarter = null;
 
 		/** 新文件/新文件夹落在哪：选中的文件夹 → 选中文件所在目录 → 根。 */
-		// ── 对练模式 ────────────────────────────────────────────────────────
-		// 四步一屏：选库 → 定目标 → 确认大纲 → 对练/报告。
-		// 对话内容全部来自 SSE（/exam/stream），答题走 POST /exam/answer。
+		// ── 学习主题（对练）────────────────────────────────────────────────
+		// 前三个步骤在面板里完成（选范围 → 定目标 → 确认大纲），存成卡片；
+		// 对练本身交给 DSH 会话：卡片上「开始 AI 对练」会把考官 prompt 预填进输入框。
 		function Exam() {
 			const current = useStore();
-			const [step, setStep] = React.useState('setup');
-			// 知识库不在面板里单独存：直接跟着左侧树（同一份 store）
-			const kbId = current.kbId || '';
-			const [objectives, setObjectives] = React.useState([]);
+			const [view, setView] = React.useState('list');
+			const [topics, setTopics] = React.useState(null);
 			const [objective, setObjective] = React.useState('');
-			const [picked, setPicked] = React.useState(-1);
-			const [plan, setPlan] = React.useState(null);
-			const [items, setItems] = React.useState([]);
-			const [answer, setAnswer] = React.useState('');
-			const [openTurn, setOpenTurn] = React.useState(null);
+			const [candidates, setCandidates] = React.useState([]);
+			const [outline, setOutline] = React.useState([]);
+			const [blueprint, setBlueprint] = React.useState([]);
 			const [busy, setBusy] = React.useState('');
 			const [error, setError] = React.useState('');
-			const [report, setReport] = React.useState(null);
-			const [board, setBoard] = React.useState([]);
-			const [asking, setAsking] = React.useState(0);
 			const [diag, setDiag] = React.useState(null);
-			// 勾选状态放在共享 store 里：左侧文件树和这个面板看到的是同一份
+			const [notice, setNotice] = React.useState('');
+
+			// 勾选状态在共享 store 里（左侧文件树负责勾）
 			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
 			const setDocIds = (next) => patch({ examPicked: typeof next === 'function' ? next(docIds) : next });
-			const [docFilter, setDocFilter] = React.useState('');
-			const abortRef = React.useRef(null);
-			const listRef = React.useRef(null);
-			const inputRef = React.useRef(null);
+			const kbId = current.kbId || '';
+			const kbName = current.kbs.find((item) => item.id === kbId)?.name ?? '（未选库）';
+			const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
+			const picked = docs.filter((doc) => docIds.includes(doc.id));
+			const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
 
-			React.useEffect(() => () => { try { abortRef.current?.abort(); } catch { /* ignore */ } }, []);
-			// 换库或文档增减：去掉不存在的勾选；换库后默认全选
-			React.useEffect(() => {
-				const ids = (current.nodes || []).filter((node) => node.kind === 'doc').map((node) => node.id);
-				const kept = (current.examPicked || []).filter((id) => ids.includes(id));
-				patch({ examPicked: kept.length ? kept : ids });
-			}, [current.kbId, (current.nodes || []).length]);
-			React.useEffect(() => {
-				const el = listRef.current;
-				if (el) el.scrollTop = el.scrollHeight;
-			}, [items.length, openTurn]);
-			React.useEffect(() => { if (openTurn) inputRef.current?.focus(); }, [openTurn]);
-
-			const push = (item) => setItems((list) => [...list, item]);
-
-			// 面板打开时问一次宿主：模型能不能用（不能就直说为什么）
 			React.useEffect(() => {
 				let alive = true;
 				(async () => {
@@ -1211,161 +1191,126 @@ window.__ModuleLoader__.load({
 						const data = await api('/exam/diag');
 						if (alive) setDiag(data);
 					} catch (err) {
-						if (alive) setDiag({ ok: false, message: err.message || '自检失败' });
+						if (alive) setDiag({ ready: false, message: err.message || '自检失败' });
 					}
 				})();
 				return () => { alive = false; };
 			}, []);
 
-			function handleEvent(event, data) {
-				if (event === 'question' || event === 'probe') {
-					setAsking((n) => n + 1);
-					setOpenTurn({ turnId: data.turnId, kind: event, kpId: data.kpId, refs: data.refs || [] });
-					push({ kind: event, text: data.text, kpId: data.kpId, seq: data.seq, difficulty: data.difficulty, refs: data.refs || [] });
-					return;
-				}
-				if (event === 'grade') { push({ kind: 'grade', ...data }); return; }
-				if (event === 'board') { setBoard(data.mastery || []); return; }
-				if (event === 'report') { setReport(data); setStep('report'); return; }
-				if (event === 'error') { setError(data.message || '对练出错了'); return; }
-				// meta / stage / done 不单独渲染
-			}
+			// 换库或文档增减：去掉失效勾选，换库后默认全选
+			React.useEffect(() => {
+				const ids = (current.nodes || []).filter((node) => node.kind === 'doc').map((node) => node.id);
+				const kept = (current.examPicked || []).filter((id) => ids.includes(id));
+				patch({ examPicked: kept.length ? kept : ids });
+			}, [current.kbId, (current.nodes || []).length]);
 
-			/** SSE：读事件流，按事件类型推进界面。 */
-			async function openStream(sessionId) {
-				try { abortRef.current?.abort(); } catch { /* ignore */ }
-				const controller = new AbortController();
-				abortRef.current = controller;
+			async function loadTopics() {
 				try {
-					const response = await fetch(`${API}/exam/stream?id=${encodeURIComponent(sessionId)}`, {
-						headers: { 'x-kb-client': '1' },
-						signal: controller.signal,
-					});
-					if (!response.ok || !response.body) throw new Error(`事件流打不开（HTTP ${response.status}）`);
-					const reader = response.body.getReader();
-					const decoder = new TextDecoder();
-					let buffer = '';
-					for (;;) {
-						const { done, value } = await reader.read();
-						if (done) break;
-						buffer += decoder.decode(value, { stream: true });
-						let cut;
-						while ((cut = buffer.indexOf('\n\n')) >= 0) {
-							const chunk = buffer.slice(0, cut);
-							buffer = buffer.slice(cut + 2);
-							const eventLine = chunk.split('\n').find((line) => line.startsWith('event: '));
-							const dataLine = chunk.split('\n').find((line) => line.startsWith('data: '));
-							if (!eventLine) continue;
-							let data = {};
-							try { data = dataLine ? JSON.parse(dataLine.slice(6)) : {}; } catch { continue; }
-							handleEvent(eventLine.slice(7).trim(), data);
-						}
-					}
+					const data = await api('/exam/topics');
+					setTopics(data.topics || []);
 				} catch (err) {
-					if (err?.name === 'AbortError') return;
-					setError(err.message || '事件流断开');
+					setError(err.message || '读取学习主题失败');
+					setTopics([]);
 				}
 			}
+			React.useEffect(() => { loadTopics(); }, []);
 
 			async function suggest() {
 				if (!current.kbId) { setError('先在左边选一个知识库'); return; }
-				const docsAllSelected = (current.nodes || []).filter((node) => node.kind === 'doc').every((node) => docIds.includes(node.id));
-				setError(''); setBusy('正在读这个库…');
+				if (!docIds.length) { setError('先在左边勾选要考的文档'); return; }
+				setError(''); setBusy('正在读这些文档…');
 				try {
 					const data = await api('/exam/suggest', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, docIds: docsAllSelected ? [] : docIds }),
+						body: JSON.stringify({ kbId, docIds }),
 					});
-					setObjectives(data.objectives || []);
-					setPicked(-1);
-					setObjective('');
-					setStep('objectives');
+					setCandidates(data.objectives || []);
+					if (!objective) setObjective(data.objectives?.[0]?.text ?? '');
+					setView('objective');
 				} catch (err) {
 					setError(err.message || '提议目标失败');
 				} finally { setBusy(''); }
 			}
 
-			async function beginExam() {
-				const text = (objective || '').trim();
-				if (!text) { setError('写一个学习目标，或选上面某一条'); return; }
-				setError(''); setBusy('正在拆解知识点…');
+			async function buildOutline() {
+				const text = objective.trim();
+				if (!text) { setError('写一个学习目标'); return; }
+				setError(''); setBusy('正在拆知识点…');
 				try {
-					const data = await api('/exam/start', {
+					const data = await api('/exam/plan', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, objective: text, docIds: (current.nodes || []).filter((node) => node.kind === 'doc').every((node) => docIds.includes(node.id)) ? [] : docIds }),
+						body: JSON.stringify({ kbId, objective: text, docIds }),
 					});
-					setPlan(data);
-					setStep('outline');
+					setOutline(data.outline || []);
+					setBlueprint(data.blueprint || []);
+					setView('outline');
 				} catch (err) {
 					setError(err.message || '生成大纲失败');
 				} finally { setBusy(''); }
 			}
 
-			function startLive() {
-				if (!plan?.session) return;
-				setItems([]); setBoard([]); setReport(null); setError(''); setOpenTurn(null);
-				setStep('live');
-				openStream(plan.session.id);
-			}
-
-			async function submitAnswer() {
-				const text = answer.trim();
-				if (!openTurn || !text) return;
-				setAnswer('');
-				setError('');
+			async function saveTopic() {
+				if (!outline.length) { setError('大纲是空的，至少留一个知识点'); return; }
+				setError(''); setBusy('正在保存…');
 				try {
-					await api('/exam/answer', {
+					await api('/exam/topics', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ sessionId: plan.session.id, turnId: openTurn.turnId, answer: text }),
+						body: JSON.stringify({ kbId, docIds, objective: objective.trim(), outline, blueprint }),
 					});
-					push({ kind: 'me', text });
-					setOpenTurn(null);
+					await loadTopics();
+					setView('list');
+					setNotice('学习主题已保存，点卡片上的「开始 AI 对练」就能开练');
+					setObjective(''); setCandidates([]); setOutline([]); setBlueprint([]);
 				} catch (err) {
-					setError(err.message || '提交失败');
-					setAnswer(text);
-				}
-			}
-
-			async function finishNow() {
-				if (!plan?.session) return;
-				setBusy('正在出报告…');
-				try {
-					const data = await api('/exam/finish', {
-						method: 'POST',
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ sessionId: plan.session.id }),
-					});
-					setReport(data.report);
-					setStep('report');
-					try { abortRef.current?.abort(); } catch { /* ignore */ }
-				} catch (err) {
-					setError(err.message || '出报告失败');
+					setError(err.message || '保存失败');
 				} finally { setBusy(''); }
 			}
 
-			function restart() {
-				try { abortRef.current?.abort(); } catch { /* ignore */ }
-				setStep('setup'); setPlan(null); setItems([]); setReport(null);
-				setObjectives([]); setObjective(''); setPicked(-1); setOpenTurn(null); setBoard([]); setError('');
+			async function startChat(topic) {
+				setError('');
+				try {
+					const data = await api(`/exam/topic/prompt?id=${encodeURIComponent(topic.id)}`);
+					if (typeof sessionStarter !== 'function') {
+						setError('会话服务还没就绪，稍后再点一次');
+						return;
+					}
+					sessionStarter(data.prompt);
+					setNotice('已把考官 prompt 放进会话输入框，按回车开始');
+				} catch (err) {
+					setError(err.message || '打不开会话');
+				}
 			}
 
-			const kpTitle = (kpId) => {
-				const kp = plan?.outline?.find((item) => item.id === kpId);
-				return kp?.title || kpId || '';
-			};
-
-			const order = ['setup', 'objectives', 'outline', 'live', 'report'];
-			const stepsBar = h('div', { className: 'dsh-kb-examSteps' },
-				[['setup', '选库'], ['objectives', '定目标'], ['outline', '确认大纲'], ['live', '对练'], ['report', '报告']]
-					.map(([key, label], index) => h('span', {
-						key,
-						className: cx('dsh-kb-examStep',
-							step === key && 'dsh-kb-examStep--on',
-							order.indexOf(step) > index && 'dsh-kb-examStep--done'),
-					}, `${index + 1}. ${label}`)));
+			async function removeTopic(topic) {
+				if (typeof askConfirm === 'function') {
+					askConfirm(`删除学习主题「${topic.objective.slice(0, 20)}…」？只删卡片，不动文档。`, async () => {
+						try {
+							await api('/exam/topic/delete', {
+								method: 'POST',
+								headers: { 'content-type': 'application/json' },
+								body: JSON.stringify({ id: topic.id }),
+							});
+							await loadTopics();
+						} catch (err) {
+							setError(err.message || '删除失败');
+						}
+					});
+					return;
+				}
+				try {
+					await api('/exam/topic/delete', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ id: topic.id }),
+					});
+					await loadTopics();
+				} catch (err) {
+					setError(err.message || '删除失败');
+				}
+			}
 
 			const errorBar = error
 				? h('div', { className: 'dsh-kb-banner dsh-kb-banner--bad' },
@@ -1373,130 +1318,122 @@ window.__ModuleLoader__.load({
 					h('button', { type: 'button', className: 'dsh-kb-bannerClose', onClick: () => setError('') },
 						h(Icon, { name: 'close', size: 12 })))
 				: null;
+			const noticeBar = notice
+				? h('div', { className: 'dsh-kb-banner dsh-kb-banner--info' },
+					h('span', null, notice),
+					h('button', { type: 'button', className: 'dsh-kb-bannerClose', onClick: () => setNotice('') },
+						h(Icon, { name: 'close', size: 12 })))
+				: null;
 
-			// ① 选库
-			if (step === 'setup') {
-				const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
-				const kbName = current.kbs.find((item) => item.id === current.kbId)?.name ?? '（左边还没选库）';
-				const picked = docs.filter((doc) => docIds.includes(doc.id));
-				const pickedChars = picked.reduce((sum, doc) => sum + (doc.chars || 0), 0);
-				const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
-				const allSelected = docs.length > 0 && picked.length === docs.length;
-				const canStart = Boolean(current.kbId) && picked.length > 0;
-				const byParent = buildTree(current.nodes || []);
-				const docsUnder = (folderId) => {
-					const out = [];
-					const walk = (parentId) => {
-						for (const node of byParent.get(parentId) || []) {
-							if (node.kind === 'doc') out.push(node.id);
-							else walk(node.id);
-						}
-					};
-					walk(folderId);
-					return out;
-				};
-				const setPicked = (ids) => patch({ examPicked: ids });
+			const modelLine = h('div', { className: cx('dsh-kb-examModel', diag && diag.ready === false && 'dsh-kb-examModel--bad') },
+				h(Icon, { name: diag && diag.ready === false ? 'warn' : 'spark', size: 13 }),
+				h('span', null, diag === null
+					? '正在检查模型…'
+					: diag.ready !== false
+						? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
+						: `用不了模型：${diag.message ?? '原因未知'}（先去设置里配一个）`));
 
-				// 右侧只做"结果回显"：列出被选中的文件夹和文件（缩进跟左边一致）
-				const summaryRows = [];
-				const drawPicked = (parentId, depth) => {
-					for (const node of byParent.get(parentId) || []) {
-						if (node.kind === 'folder') {
-							const ids = docsUnder(node.id);
-							const hit = ids.filter((id) => docIds.includes(id));
-							if (!hit.length) continue;
-							const whole = hit.length === ids.length;
-							summaryRows.push(h('div', {
-								key: node.id,
-								className: 'dsh-kb-examPick dsh-kb-examPick--folder',
-								style: { paddingLeft: `${2 + depth * 14}px` },
-							},
-								h(Icon, { name: 'folder', size: 13 }),
-								h('span', { className: 'dsh-kb-examPickName' }, node.name),
-								h('span', { className: 'dsh-kb-examPickMeta' }, whole ? `${ids.length} 篇` : `${hit.length}/${ids.length} 篇`)));
-							drawPicked(node.id, depth + 1);
-							continue;
-						}
-						if (!docIds.includes(node.id)) continue;
-						const ext = String(node.ext || '').replace(/^\./, '').toUpperCase();
-						summaryRows.push(h('div', {
-							key: node.id,
-							className: 'dsh-kb-examPick',
-							style: { paddingLeft: `${2 + depth * 14}px` },
-							title: node.name,
-						},
-							h('span', { className: 'dsh-kb-examDocExt' }, ext || 'FILE'),
-							h('span', { className: 'dsh-kb-examPickName' }, node.name),
-							h('span', { className: 'dsh-kb-examPickMeta' }, node.chars ? size(node.chars) : '—')));
-					}
-				};
-				drawPicked('', 0);
-
+			// ① 卡片列表
+			if (view === 'list') {
+				const list = topics ?? [];
 				return h('div', { className: 'dsh-kb-exam' },
-					stepsBar,
+					h('div', { className: 'dsh-kb-examHead' },
+						h('div', { className: 'dsh-kb-examTitle' }, '学习主题'),
+						h('span', { className: 'dsh-kb-examScopeLabel' }, topics === null ? '加载中…' : `${list.length} 个`),
+						h('span', { className: 'dsh-kb-viewerGrow' }),
+						h('button', {
+							type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+							onClick: () => { setView('scope'); setError(''); setNotice(''); },
+						}, '新建学习主题')),
+					errorBar,
+					noticeBar,
+					list.length === 0
+						? h('div', { className: 'dsh-kb-examCard dsh-kb-examEmpty' },
+							h(Icon, { name: 'book', size: 22 }),
+							h('p', { className: 'dsh-kb-examLead' }, '还没有学习主题。'),
+							h('p', { className: 'dsh-kb-hint' },
+								'建一个：选好要考的文件 → 定一个学习目标 → 确认大纲，存成卡片，随时点开练。'),
+							h('button', {
+								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+								onClick: () => { setView('scope'); setError(''); setNotice(''); },
+							}, '新建学习主题'))
+						: h('div', { className: 'dsh-kb-topicList' },
+							list.map((topic) => h('div', { key: topic.id, className: 'dsh-kb-topic' },
+								h('div', { className: 'dsh-kb-topicHead' },
+									h('div', { className: 'dsh-kb-topicTitle' }, topic.objective),
+									h('span', { className: 'dsh-kb-viewerGrow' }),
+									h('button', {
+										type: 'button', className: 'dsh-kb-examMini',
+										onClick: () => removeTopic(topic),
+										title: '删除这个学习主题（不动文档）',
+									}, '删除')),
+								h('div', { className: 'dsh-kb-topicMeta' },
+									`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${when(topic.createdAt)}`),
+								h('div', { className: 'dsh-kb-topicKps' },
+									topic.outline.map((kp, index) => h('span', { key: kp.id ?? index, className: 'dsh-kb-topicKp' },
+										`${index + 1}. ${kp.title}`))),
+								h('div', { className: 'dsh-kb-topicFoot' },
+									h('button', {
+										type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+										onClick: () => startChat(topic),
+									}, '开始 AI 对练'),
+									h('span', { className: 'dsh-kb-hint' }, '会打开一个会话，把考官 prompt 预填进去'))))));
+			}
+
+			// ② 选范围（勾选在左边文件树里做）
+			if (view === 'scope') {
+				return h('div', { className: 'dsh-kb-exam' },
+					h('div', { className: 'dsh-kb-examHead' },
+						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setView('list') }, '← 返回'),
+						h('div', { className: 'dsh-kb-examTitle' }, '第 1 步 · 选范围'),
+						h('span', { className: 'dsh-kb-examScopeLabel' }, `${kbName} · 已选 ${picked.length}/${docs.length} 篇`),
+						h('span', { className: 'dsh-kb-viewerGrow' }),
+						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds(docs.map((doc) => doc.id)) }, '全选'),
+						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
-						h('div', { className: 'dsh-kb-examHead' },
-							h('div', { className: 'dsh-kb-examTitle' }, '对练范围'),
-							h('span', { className: 'dsh-kb-examScopeLabel' }, `已选：${kbName} · ${picked.length}/${docs.length} 篇`),
-							h('span', { className: 'dsh-kb-viewerGrow' }),
-							h('button', {
-								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => setPicked(docs.map((doc) => doc.id)),
-							}, '全选'),
-							h('button', {
-								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => setPicked(docs.filter((doc) => !docIds.includes(doc.id)).map((doc) => doc.id)),
-							}, '反选'),
-							h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setPicked([]) }, '清空')),
+						h('p', { className: 'dsh-kb-examLead' }, '在左边文件树里勾选要考的文件（文件夹可以整块勾）。'),
 						h('div', { className: 'dsh-kb-examPicks' },
 							!current.kbId
 								? h('p', { className: 'dsh-kb-hint' }, '先在左边选一个知识库。')
 								: docs.length === 0
 									? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
 									: picked.length === 0
-										? h('p', { className: 'dsh-kb-hint' }, '左边还没勾选任何文件——勾一下，这里会显示你选了什么。')
-										: summaryRows),
-						h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
-							'在左边文件树里勾选（文件夹可以整块勾）；这里只回显结果。'),
-						h('div', { className: cx('dsh-kb-examModel', diag && diag.ready === false && 'dsh-kb-examModel--bad') },
-							h(Icon, { name: diag && diag.ready === false ? 'warn' : 'spark', size: 13 }),
-							h('span', null, diag === null
-								? '正在检查模型…'
-								: diag.ready !== false
-									? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
-									: `用不了模型：${diag.message ?? '原因未知'}（先去设置里配一个，或在会话里选一个）`)),
+										? h('p', { className: 'dsh-kb-hint' }, '左边还没勾选任何文件。')
+										: picked.map((doc) => h('div', { key: doc.id, className: 'dsh-kb-examPick', title: doc.name },
+											h('span', { className: 'dsh-kb-examDocExt' }, String(doc.ext || '').replace(/^\./, '').toUpperCase() || 'FILE'),
+											h('span', { className: 'dsh-kb-examPickName' }, doc.name),
+											h('span', { className: 'dsh-kb-examPickMeta' }, doc.chars ? size(doc.chars) : '—')))),
+						modelLine,
 						h('div', { className: 'dsh-kb-examFoot' },
-							h('span', { className: 'dsh-kb-examFootHint' },
-								allSelected ? `整库：${docs.length} 篇 · ${size(pickedChars)}` : `将用 ${picked.length} 篇 · ${size(pickedChars)} 出题`),
+							h('span', { className: 'dsh-kb-examFootHint' }, `将用 ${picked.length} 篇`),
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-								disabled: Boolean(busy) || !canStart,
+								disabled: Boolean(busy) || !current.kbId || !picked.length,
 								onClick: suggest,
-							}, busy || '开始分析'))));
+							}, busy || '下一步：定目标'))));
 			}
 
-			// ② 定目标
-			if (step === 'objectives') {
+			// ③ 定目标
+			if (view === 'objective') {
 				return h('div', { className: 'dsh-kb-exam' },
-					stepsBar,
+					h('div', { className: 'dsh-kb-examHead' },
+						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setView('scope') }, '← 上一步'),
+						h('div', { className: 'dsh-kb-examTitle' }, '第 2 步 · 定目标')),
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, '挑一个目标，或者自己改。目标写得越具体，判定越准。'),
-						objectives.map((item, index) => h('button', {
+						h('p', { className: 'dsh-kb-examLead' }, '练完要能做到什么？Pick 一个候选，或者自己写。'),
+						candidates.map((item, index) => h('button', {
 							key: index,
 							type: 'button',
-							className: cx('dsh-kb-examObj', picked === index && 'dsh-kb-examObj--on'),
-							onClick: () => {
-								setPicked(index);
-								setObjective(item.text);
-							},
+							className: cx('dsh-kb-examObj', objective === item.text && 'dsh-kb-examObj--on'),
+							onClick: () => setObjective(item.text),
 						},
 							h('span', { className: 'dsh-kb-examObjText' }, item.text),
 							h('span', { className: 'dsh-kb-examObjMeta' },
 								`${item.coverage === 'high' ? '覆盖度高' : item.coverage === 'low' ? '覆盖度低' : '覆盖度中'}${item.why ? ` · ${item.why}` : ''}`))),
 						h('label', { className: 'dsh-kb-examField dsh-kb-examField--stack' },
-							h('span', null, '你的目标'),
+							h('span', null, '学习目标'),
 							h('textarea', {
 								className: 'dsh-kb-examTextarea',
 								rows: 3,
@@ -1504,130 +1441,57 @@ window.__ModuleLoader__.load({
 								placeholder: '例：能根据症状区分玉米大斑病与丝黑穗病，并说出对应防治措施',
 								onChange: (event) => setObjective(event.target.value),
 							})),
-						h('div', { className: 'dsh-kb-examActions' },
-							h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => setStep('setup') }, '← 重选库'),
+						h('div', { className: 'dsh-kb-examFoot' },
+							h('span', { className: 'dsh-kb-examFootHint' }, objective.trim() ? `${objective.trim().length} 字` : '还没写'),
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								disabled: Boolean(busy) || !objective.trim(),
-								onClick: beginExam,
-							}, busy || '生成大纲'))));
+								onClick: buildOutline,
+							}, busy || '下一步：确认大纲'))));
 			}
 
-			// ③ 确认大纲
-			if (step === 'outline') {
-				const outline = plan?.outline ?? [];
-				const blueprint = plan?.blueprint ?? [];
-				return h('div', { className: 'dsh-kb-exam' },
-					stepsBar,
-					errorBar,
-					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, `目标：${plan?.session?.objective ?? ''}`),
-						h('div', { className: 'dsh-kb-examKpList' },
-							outline.map((kp) => {
-								const item = blueprint.find((entry) => entry.kpId === kp.id);
-								return h('div', { key: kp.id, className: 'dsh-kb-examKp' },
-									h('span', { className: 'dsh-kb-examKpTitle' }, kp.title),
-									h('span', { className: 'dsh-kb-examKpMeta' }, `${item?.turns ?? 2} 题 · ${item?.difficulty ?? 'discern'}`));
-							})),
-						h('p', { className: 'dsh-kb-hint' }, '对练会按这个顺序问，每题答完立刻给反馈，答对了会追一层。'),
-						h('div', { className: 'dsh-kb-examActions' },
-							h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => setStep('objectives') }, '← 改目标'),
-							h('button', { type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary', onClick: startLive }, '开始对练'))));
-			}
-
-			// ④ 对练
-			if (step === 'live') {
-				return h('div', { className: 'dsh-kb-exam dsh-kb-exam--live' },
-					stepsBar,
-					errorBar,
-					h('div', { className: 'dsh-kb-examTop' },
-						h('span', { className: 'dsh-kb-examProgress' },
-							`第 ${asking} 题${openTurn ? ` · 当前知识点：${kpTitle(openTurn.kpId)}` : ' · 正在出题…'}`),
-						h('span', { className: 'dsh-kb-viewerGrow' }),
-						board.slice(0, 3).map((item) => h('span', {
-							key: item.kpId,
-							className: 'dsh-kb-examScore',
-							title: kpTitle(item.kpId),
-						}, `${kpTitle(item.kpId).slice(0, 6)} ${Math.round(item.score)}`)),
-						h('button', { type: 'button', className: 'dsh-kb-btn', disabled: Boolean(busy), onClick: finishNow },
-							busy || '结束并出报告')),
-					h('div', { className: 'dsh-kb-examList', ref: listRef },
-						items.length === 0 ? h('div', { className: 'dsh-kb-hint' }, '正在读片段、出第一题…') : null,
-						items.map((item, index) => {
-							if (item.kind === 'question' || item.kind === 'probe') {
-								return h('div', { key: index, className: 'dsh-kb-msg dsh-kb-msg--ai' },
-									item.kind === 'probe' ? h('span', { className: 'dsh-kb-msgTag' }, '追问') : null,
-									h('div', null, item.text),
-									item.refs?.length
-										? h('div', { className: 'dsh-kb-msgRefs' },
-											item.refs.map((ref, i) => h('span', { key: i, className: 'dsh-kb-msgRef' },
-												`《${ref.name}》${ref.page ? ` P${ref.page}` : ''}`)))
-										: null);
-							}
-							if (item.kind === 'me') {
-								return h('div', { key: index, className: 'dsh-kb-msg dsh-kb-msg--me' }, h('div', null, item.text));
-							}
-							const tone = item.verdict === 'full' ? 'ok' : item.verdict === 'partial' ? 'mid' : 'bad';
-							return h('div', { key: index, className: cx('dsh-kb-msg dsh-kb-msg--grade', `dsh-kb-msg--${tone}`) },
-								h('div', { className: 'dsh-kb-msgGradeHead' },
-									h('span', null, `${item.score ?? 0}/2`),
-									h('span', null, item.verdict === 'full' ? '答对了' : item.verdict === 'partial' ? '部分正确' : '答错了')),
-								item.comment ? h('div', null, item.comment) : null,
-								item.missing?.length ? h('div', { className: 'dsh-kb-msgMissing' }, `缺：${item.missing.join('、')}`) : null);
+			// ④ 确认大纲 → 保存成卡片
+			return h('div', { className: 'dsh-kb-exam' },
+				h('div', { className: 'dsh-kb-examHead' },
+					h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setView('objective') }, '← 上一步'),
+					h('div', { className: 'dsh-kb-examTitle' }, '第 3 步 · 确认大纲'),
+					h('span', { className: 'dsh-kb-examScopeLabel' }, `${outline.length} 个知识点`)),
+				errorBar,
+				h('div', { className: 'dsh-kb-examCard' },
+					h('p', { className: 'dsh-kb-examLead' }, objective),
+					h('div', { className: 'dsh-kb-outlineList' },
+						outline.map((kp, index) => {
+							const plan = blueprint.find((item) => item.kpId === kp.id) ?? {};
+							return h('div', { key: kp.id ?? index, className: 'dsh-kb-outlineRow' },
+								h('span', { className: 'dsh-kb-outlineNo' }, String(index + 1)),
+								h('input', {
+									className: 'dsh-kb-outlineInput',
+									value: kp.title,
+									onChange: (event) => {
+										const next = event.target.value;
+										setOutline((list) => list.map((item, i) => (i === index ? { ...item, title: next } : item)));
+									},
+								}),
+								h('span', { className: 'dsh-kb-outlineMeta' }, `${plan.turns ?? 2} 题 · ${plan.difficulty ?? 'discern'}`),
+								h('button', {
+									type: 'button', className: 'dsh-kb-examMini',
+									onClick: () => {
+										const removed = outline[index];
+										setOutline((list) => list.filter((_, i) => i !== index));
+										setBlueprint((list) => list.filter((item) => item.kpId !== removed?.id));
+									},
+								}, '删'));
 						})),
-					h('div', { className: 'dsh-kb-examInput' },
-						h('textarea', {
-							ref: inputRef,
-							className: 'dsh-kb-examTextarea dsh-kb-examTextarea--answer',
-							rows: 2,
-							value: answer,
-							disabled: !openTurn,
-							placeholder: openTurn ? '用自己的话回答，Ctrl+Enter 提交' : '等下一题…',
-							onChange: (event) => setAnswer(event.target.value),
-							onKeyDown: (event) => {
-								if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-									event.preventDefault();
-									submitAnswer();
-								}
-							},
-						}),
+					h('p', { className: 'dsh-kb-hint' }, '保存后就是一张卡片；对练在会话里进行，AI 会按这个顺序考。'),
+					h('div', { className: 'dsh-kb-examFoot' },
+						h('span', { className: 'dsh-kb-examFootHint' }, `${picked.length} 篇 · ${outline.length} 个知识点`),
 						h('button', {
 							type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-							disabled: !openTurn || !answer.trim(),
-							onClick: submitAnswer,
-						}, '提交')));
-			}
-
-			// ⑤ 报告
-			const verdictTone = report?.verdict === 'pass' ? 'ok' : report?.verdict === 'near' ? 'mid' : 'bad';
-			return h('div', { className: 'dsh-kb-exam' },
-				stepsBar,
-				h('div', { className: 'dsh-kb-examCard' },
-					h('div', { className: cx('dsh-kb-examVerdict', `dsh-kb-examVerdict--${verdictTone}`) },
-						h('strong', null, report?.label ?? '—'),
-						h('span', null, `平均覆盖 ${report?.avgCoverage ?? 0} · 共 ${report?.turns ?? 0} 题`)),
-					(report?.kps ?? []).map((kp) => h('div', { key: kp.kpId, className: 'dsh-kb-examBar' },
-						h('span', { className: 'dsh-kb-examBarTitle' }, kp.title),
-						h('span', { className: 'dsh-kb-examBarTrack' },
-							h('span', {
-								className: cx('dsh-kb-examBarFill', kp.score >= 80 ? 'dsh-kb-examBarFill--ok' : kp.score >= 60 ? 'dsh-kb-examBarFill--mid' : 'dsh-kb-examBarFill--bad'),
-								style: { width: `${Math.max(4, Math.min(100, kp.score))}%` },
-							})),
-						h('span', { className: 'dsh-kb-examBarScore' }, `${kp.score} · ${kp.label}`))),
-					report?.weak?.length
-						? h('div', { className: 'dsh-kb-examWeak' },
-							h('div', { className: 'dsh-kb-examWeakTitle' }, '该补的地方'),
-							report.weak.map((item) => h('div', { key: item.kpId, className: 'dsh-kb-examWeakRow' },
-								h('strong', null, item.title),
-								h('span', null, item.missing?.length ? `缺：${item.missing.join('、')}` : '得分偏低'))))
-						: null,
-					report?.unsupported?.length
-						? h('p', { className: 'dsh-kb-hint' }, `这些知识点库里没有足够内容，没给分：${report.unsupported.join('、')}`)
-						: null,
-					h('div', { className: 'dsh-kb-examActions' },
-						h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => setStep('objectives') }, '换个目标再练'),
-						h('button', { type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary', onClick: restart }, '重新开始'))));
+							disabled: Boolean(busy) || !outline.length,
+							onClick: saveTopic,
+						}, busy || '保存学习主题'))));
 		}
+
 
 		function currentFolderId(current) {
 			const selected = current.selectedId
@@ -2560,6 +2424,22 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examPickName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
 				'.dsh-kb-examPickMeta{color:var(--dsw-alias-label-secondary);font-size:11px;white-space:nowrap;}',
 				'.dsh-kb-rowPick{margin:0 2px 0 0;flex:none;cursor:pointer;}',
+				'.dsh-kb-topicList{display:flex;flex-direction:column;gap:10px;}',
+				'.dsh-kb-topic{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);}',
+				'.dsh-kb-topic:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-topicHead{display:flex;align-items:flex-start;gap:8px;}',
+				'.dsh-kb-topicTitle{font-size:13px;font-weight:600;line-height:1.5;}',
+				'.dsh-kb-topicMeta{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-topicKps{display:flex;flex-wrap:wrap;gap:6px;}',
+				'.dsh-kb-topicKp{padding:2px 8px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-topicFoot{display:flex;align-items:center;gap:8px;}',
+				'.dsh-kb-examEmpty{align-items:center;text-align:center;}',
+				'.dsh-kb-outlineList{display:flex;flex-direction:column;gap:6px;}',
+				'.dsh-kb-outlineRow{display:flex;align-items:center;gap:8px;}',
+				'.dsh-kb-outlineNo{width:18px;flex:none;text-align:center;font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-outlineInput{flex:1;min-width:0;height:28px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:12.5px;}',
+				'.dsh-kb-outlineInput:focus{outline:none;border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-outlineMeta{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
