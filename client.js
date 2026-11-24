@@ -1142,6 +1142,7 @@ window.__ModuleLoader__.load({
 			const [diag, setDiag] = React.useState(null);
 			const [docIds, setDocIds] = React.useState([]);
 			const [scopeMode, setScopeMode] = React.useState('kb');
+			const [docFilter, setDocFilter] = React.useState('');
 			const abortRef = React.useRef(null);
 			const listRef = React.useRef(null);
 			const inputRef = React.useRef(null);
@@ -1334,54 +1335,106 @@ window.__ModuleLoader__.load({
 			// ① 选库
 			if (step === 'setup') {
 				const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
-				const kbName = current.kbs.find((kb) => kb.id === kbId)?.name ?? '未选库';
+				const kbName = current.kbs.find((item) => item.id === kbId)?.name ?? '未选库';
 				const wholeKb = scopeMode === 'kb';
-				const canStart = docs.length > 0 && (wholeKb || docIds.length > 0);
+				const picked = docs.filter((doc) => docIds.includes(doc.id));
+				const pickedChars = picked.reduce((sum, doc) => sum + (doc.chars || 0), 0);
+				const totalChars = docs.reduce((sum, doc) => sum + (doc.chars || 0), 0);
+				const canStart = docs.length > 0 && (wholeKb || picked.length > 0);
+				const keyword = String(docFilter || '').trim().toLowerCase();
+				const visible = keyword ? docs.filter((doc) => doc.name.toLowerCase().includes(keyword)) : docs;
+				const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
 				return h('div', { className: 'dsh-kb-exam' },
 					stepsBar,
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, '选范围：整个知识库，或者只挑其中几篇。'),
-						h('div', { className: 'dsh-kb-examScope' },
-							h('span', { className: 'dsh-kb-examScopeLabel' }, '知识库'),
+						h('div', { className: 'dsh-kb-examHead' },
+							h('div', { className: 'dsh-kb-examTitle' }, '选对练范围'),
+							h('span', { className: 'dsh-kb-viewerGrow' }),
 							h('select', {
-								className: 'dsh-kb-select',
+								className: 'dsh-kb-select dsh-kb-examKb',
 								value: kbId,
+								title: '换知识库（左边文件树会跟着切）',
 								onChange: (event) => {
 									const nextKb = event.target.value;
 									setKbId(nextKb);
 									setDocIds([]);
-									// 切库时左边文件树跟着切，两边始终是同一个库
+									setDocFilter('');
 									if (nextKb && nextKb !== current.kbId) loadState(nextKb);
 								},
-							}, current.kbs.map((kb) => h('option', { key: kb.id, value: kb.id }, `${kb.name}（${kb.docs ?? 0} 篇）`)))),
-						h('div', { className: 'dsh-kb-examMode' },
-							h('label', { className: cx('dsh-kb-examModeItem', wholeKb && 'dsh-kb-examModeItem--on') },
-								h('input', { type: 'radio', name: 'dsh-kb-exam-scope', checked: wholeKb, onChange: () => setScopeMode('kb') }),
-								h('span', null, `整个知识库「${kbName}」（${docs.length} 篇）`)),
-							h('label', { className: cx('dsh-kb-examModeItem', !wholeKb && 'dsh-kb-examModeItem--on') },
-								h('input', { type: 'radio', name: 'dsh-kb-exam-scope', checked: !wholeKb, onChange: () => setScopeMode('files') }),
-								h('span', null, wholeKb ? '只挑其中几篇' : `只挑其中几篇（已选 ${docIds.length}）`))),
+							}, current.kbs.map((item) => h('option', { key: item.id, value: item.id }, item.name)))),
+						h('div', { className: 'dsh-kb-examModes' },
+							h('button', {
+								type: 'button',
+								className: cx('dsh-kb-examModeCard', wholeKb && 'dsh-kb-examModeCard--on'),
+								onClick: () => setScopeMode('kb'),
+							},
+								h(Icon, { name: 'book', size: 15 }),
+								h('span', { className: 'dsh-kb-examModeTitle' }, '整个知识库'),
+								h('span', { className: 'dsh-kb-examModeSub' }, `${docs.length} 篇 · ${size(totalChars)}`)),
+							h('button', {
+								type: 'button',
+								className: cx('dsh-kb-examModeCard', !wholeKb && 'dsh-kb-examModeCard--on'),
+								onClick: () => setScopeMode('files'),
+							},
+								h(Icon, { name: 'doc', size: 15 }),
+								h('span', { className: 'dsh-kb-examModeTitle' }, '只挑其中几篇'),
+								h('span', { className: 'dsh-kb-examModeSub' }, wholeKb ? '自己勾要考的文档' : `已选 ${picked.length} 篇 · ${size(pickedChars)}`))),
 						wholeKb
-							? h('p', { className: 'dsh-kb-hint' }, '整库对练：上面这些文档都会用来出题。想只考几篇就切上面第二项。')
-							: h('div', { className: 'dsh-kb-examDocs' },
-								docs.length === 0
-									? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
-									: docs.map((doc) => h('label', { key: doc.id, className: 'dsh-kb-examDoc' },
-										h('input', {
-											type: 'checkbox',
-											checked: docIds.includes(doc.id),
-											onChange: () => setDocIds((list) => (list.includes(doc.id) ? list.filter((id) => id !== doc.id) : [...list, doc.id])),
-										}),
-										h('span', { className: 'dsh-kb-examDocName' }, doc.name),
-										h('span', { className: 'dsh-kb-examDocMeta' }, `${String(doc.ext || '').replace(/^\./, '')}${doc.chars ? ` · ${doc.chars} 字` : ''}`)))),
+							? h('p', { className: 'dsh-kb-hint dsh-kb-examNote' }, `整个「${kbName}」都会用来出题。`)
+							: h('div', { className: 'dsh-kb-examPicker' },
+								h('div', { className: 'dsh-kb-examPickerBar' },
+									h('span', { className: 'dsh-kb-examPickerCount' }, `已选 ${picked.length} / ${docs.length}`),
+									docs.length > 8
+										? h('input', {
+											className: 'dsh-kb-examFilter',
+											placeholder: '按文件名过滤…',
+											value: docFilter,
+											onChange: (event) => setDocFilter(event.target.value),
+										})
+										: null,
+									h('span', { className: 'dsh-kb-viewerGrow' }),
+									h('button', {
+										type: 'button', className: 'dsh-kb-examMini',
+										onClick: () => setDocIds(visible.map((doc) => doc.id)),
+									}, '全选'),
+									h('button', {
+										type: 'button', className: 'dsh-kb-examMini',
+										onClick: () => setDocIds(docs.filter((doc) => !docIds.includes(doc.id)).map((doc) => doc.id)),
+									}, '反选'),
+									h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
+								h('div', { className: 'dsh-kb-examDocs' },
+									docs.length === 0
+										? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
+										: visible.length === 0
+											? h('p', { className: 'dsh-kb-hint' }, '没有匹配的文件。')
+											: visible.map((doc) => {
+												const on = docIds.includes(doc.id);
+												const ext = String(doc.ext || '').replace(/^\./, '').toUpperCase();
+												return h('label', {
+													key: doc.id,
+													className: cx('dsh-kb-examDoc', on && 'dsh-kb-examDoc--on'),
+													title: doc.name,
+												},
+													h('input', {
+														type: 'checkbox',
+														checked: on,
+														onChange: () => setDocIds((list) => (list.includes(doc.id) ? list.filter((id) => id !== doc.id) : [...list, doc.id])),
+													}),
+													h('span', { className: 'dsh-kb-examDocExt' }, ext || 'FILE'),
+													h('span', { className: 'dsh-kb-examDocName' }, doc.name),
+													h('span', { className: 'dsh-kb-examDocMeta' }, doc.chars ? size(doc.chars) : '—'));
+											}))),
 						h('div', { className: cx('dsh-kb-examModel', diag && !diag.ok && 'dsh-kb-examModel--bad') },
-							diag === null
+							h(Icon, { name: diag && !diag.ok ? 'warn' : 'spark', size: 13 }),
+							h('span', null, diag === null
 								? '正在检查模型…'
 								: diag.ok
 									? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
-									: `用不了模型：${diag.message ?? '原因未知'}（先在会话里选一个模型，或去设置里配 Key）`),
-						h('div', { className: 'dsh-kb-examActions' },
+									: `用不了模型：${diag.message ?? '原因未知'}（先去设置里配一个，或在会话里选一个）`)),
+						h('div', { className: 'dsh-kb-examFoot' },
+							h('span', { className: 'dsh-kb-examFootHint' },
+								wholeKb ? `将用 ${docs.length} 篇 · ${size(totalChars)} 出题` : `将用 ${picked.length} 篇 · ${size(pickedChars)} 出题`),
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								disabled: Boolean(busy) || !canStart,
@@ -2443,6 +2496,27 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examMode{display:flex;flex-wrap:wrap;gap:8px;}',
 				'.dsh-kb-examModeItem{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;font-size:12.5px;cursor:pointer;}',
 				'.dsh-kb-examModeItem--on{border-color:var(--dsw-alias-label-brand,#1f6feb);background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-examHead{display:flex;align-items:center;gap:8px;}',
+				'.dsh-kb-examTitle{font-size:13px;font-weight:600;}',
+				'.dsh-kb-examKb{max-width:220px;}',
+				'.dsh-kb-examModes{display:grid;grid-template-columns:1fr 1fr;gap:8px;}',
+				'.dsh-kb-examModeCard{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;}',
+				'.dsh-kb-examModeCard:hover{background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-examModeCard--on{border-color:var(--dsw-alias-label-brand,#1f6feb);background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-examModeTitle{font-size:12.5px;font-weight:600;}',
+				'.dsh-kb-examModeSub{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examNote{margin:0;}',
+				'.dsh-kb-examPicker{display:flex;flex-direction:column;gap:6px;}',
+				'.dsh-kb-examPickerBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}',
+				'.dsh-kb-examPickerCount{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examFilter{height:24px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:11.5px;max-width:180px;}',
+				'.dsh-kb-examMini{padding:2px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:11px;cursor:pointer;}',
+				'.dsh-kb-examMini:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-examDoc--on{background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-examDocExt{width:36px;flex:none;font-size:10px;letter-spacing:.02em;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examFoot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:9px;border-top:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-examFootHint{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examModel{display:flex;align-items:center;gap:6px;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();

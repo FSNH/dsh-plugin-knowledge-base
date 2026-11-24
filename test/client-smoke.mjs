@@ -509,8 +509,10 @@ console.log('\n[9] 对练面板');
 	check('步骤条有 5 步', stepNodes.length === 5, `实际 ${stepNodes.length}`);
 	check('有「整个知识库」这一档', exam.some((node) => String(node.props?.children || '').includes('整个知识库')));
 	check('有「只挑其中几篇」这一档', exam.some((node) => String(node.props?.children || '').includes('只挑其中几篇')));
-	check('两档是单选（radio）', exam.filter((node) => node.props?.type === 'radio').length >= 2);
-	check('面板里能换知识库', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examScope'));
+	check('两档是卡片按钮', exam.filter((node) => String(node.props?.className || '').includes('dsh-kb-examModeCard')).length >= 2);
+	check('面板里能换知识库', exam.some((node) => String(node.props?.className || '').includes('dsh-kb-examKb')));
+	check('底部有预估计数与开始按钮', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examFoot')
+		&& exam.some((node) => String(node.props?.children || '') === '开始分析'));
 	internals.patch({ examOpen: false });
 }
 
