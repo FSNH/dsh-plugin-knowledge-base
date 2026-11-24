@@ -1158,7 +1158,40 @@ window.__ModuleLoader__.load({
 		// 「问 AI」的会话入口由 apply 注入（组件拿不到 ctx）
 		let sessionStarter = null;
 
-		/** 新文件/新文件夹落在哪：选中的文件夹 → 选中文件所在目录 → 根。 */
+		// 检验报告：按行拆成 结论 / 分项 / 其它说明，别让用户读一大坨
+		const REPORT_KEYS = /^(结论|共性短板|建议复习|建议|备注|总评)[:：]/;
+		function renderReport(text) {
+			const lines = String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+			const blocks = lines.map((line) => {
+				if (REPORT_KEYS.test(line)) {
+					const idx = line.search(/[:：]/);
+					return { kind: 'key', label: line.slice(0, idx), text: line.slice(idx + 1).trim() };
+				}
+				if (/^[-·•*]\s*/.test(line)) {
+					const body = line.replace(/^[-·•*]\s*/, '');
+					const split = body.search(/[:：]/);
+					return split > 0
+						? { kind: 'item', label: body.slice(0, split), text: body.slice(split + 1).trim() }
+						: { kind: 'item', label: '', text: body };
+				}
+				return { kind: 'para', text: line };
+			});
+			return blocks.map((block, index) => {
+				if (block.kind === 'key') {
+					return h('div', { key: index, className: 'dsh-kb-rpKey' },
+						h('span', { className: 'dsh-kb-rpKeyName' }, block.label),
+						h('span', null, block.text));
+				}
+				if (block.kind === 'item') {
+					return h('div', { key: index, className: 'dsh-kb-rpItem' },
+						h('span', { className: 'dsh-kb-rpDot' }, '·'),
+						block.label ? h('span', { className: 'dsh-kb-rpLabel' }, block.label) : null,
+						h('span', { className: 'dsh-kb-rpText' }, block.text));
+				}
+				return h('div', { key: index, className: 'dsh-kb-rpPara' }, block.text);
+			});
+		}
+
 		// ── 学习主题（对练）────────────────────────────────────────────────
 		// 面板只做两件事：① 选范围 ② 管卡片。
 		// 定目标、拆大纲全部交给 DSH 会话（agent 用 kb_search/kb_read 读库，
@@ -1358,7 +1391,7 @@ window.__ModuleLoader__.load({
 											: openedRun.verdict === 'near' ? 'dsh-kb-runScore--mid' : 'dsh-kb-runScore--bad'),
 								}, verdictLabel)
 								: null),
-						h('div', { className: 'dsh-kb-runReportBody' }, openedRun.summary));
+						h('div', { className: 'dsh-kb-runReportBody' }, renderReport(openedRun.summary)));
 					return h('div', { className: 'dsh-kb-runBody' }, reportBlock,
 						openedRun.items.map((item) => {
 							const open = openItems.includes(item.id);
@@ -1545,6 +1578,7 @@ window.__ModuleLoader__.load({
 		}
 
 
+		/** 新文件/新文件夹落在哪：选中的文件夹 → 选中文件所在目录 → 根。 */
 		function currentFolderId(current) {
 			const selected = current.selectedId
 				? current.nodes.find((node) => node.id === current.selectedId)
@@ -2533,6 +2567,14 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-runReportHead{display:flex;align-items:center;gap:8px;}',
 				'.dsh-kb-runReportTitle{font-size:12.5px;font-weight:600;}',
 				'.dsh-kb-runReportBody{font-size:12px;line-height:1.75;white-space:pre-wrap;word-break:break-word;}',
+				'.dsh-kb-runReportBody{display:flex;flex-direction:column;gap:5px;font-size:12px;line-height:1.7;white-space:normal;}',
+				'.dsh-kb-rpPara{color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-rpKey{display:flex;gap:6px;padding:2px 0;}',
+				'.dsh-kb-rpKeyName{flex:none;font-weight:600;color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-rpItem{display:flex;gap:5px;padding-left:2px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-rpDot{flex:none;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-rpLabel{flex:none;color:var(--dsw-alias-label-primary);font-weight:500;}',
+				'.dsh-kb-rpText{min-width:0;word-break:break-word;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
