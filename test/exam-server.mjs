@@ -90,7 +90,13 @@ async function fakeChat({ purpose }) {
 const exam = createExam({ store, index, chat: fakeChat, logger: { warn() {}, error() {} } });
 
 // ── 把路由挂到一个真 http 服务上 ──────────────────────────────────────
-const { routes } = createExamRoutes({ exam, origin: () => '', logger: { warn() {} } });
+const { routes } = createExamRoutes({
+	exam,
+	origin: () => '',
+	logger: { warn() {} },
+	// 自检用假的：真实现依赖宿主 llm，测试里只验协议
+	diag: async () => ({ ok: true, picked: { provider: 'test', model: 'demo-model' }, models: [], providers: ['test'] }),
+});
 const server = http.createServer((req, res) => {
 	const url = new URL(req.url ?? '/', 'http://local');
 	const route = routes.find((item) => item.kind === 'exact' && item.path === url.pathname);
@@ -192,7 +198,14 @@ try {
 	const one = await (await fetch(`${base}/exam/session?id=${sessionId}`, { headers: { 'x-kb-client': '1' } })).json();
 	check('单场能恢复 turns', one.ok === true && one.turns.length >= answered, `${one.turns?.length}`);
 
-	console.log('\n[6] 权限');
+	console.log('\n[6] 模型自检');
+{
+	const diagBody = await (await fetch(`${base}/exam/diag`, { headers: { 'x-kb-client': '1' } })).json();
+	check('diag 返回 ok', diagBody.ok === true, JSON.stringify(diagBody).slice(0, 120));
+	check('diag 带出选中的模型', diagBody.picked?.model === 'demo-model', JSON.stringify(diagBody.picked));
+}
+
+console.log('\n[7] 权限');
 	const noHeader = await fetch(`${base}/exam/list`);
 	check('缺 x-kb-client 头被拒', noHeader.status === 403, String(noHeader.status));
 	const badPost = await fetch(`${base}/exam/suggest`, { method: 'GET', headers: { 'x-kb-client': '1' } });

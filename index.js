@@ -82,12 +82,25 @@ export function apply(ctx, config = {}) {
 	// ── HTTP 路由 ──────────────────────────────────────────────────────────
 	// 二进制预览（<img>/<iframe>）带不了自定义头，给它一条带启动令牌的通道。
 	const token = crypto.randomUUID();
-	// 对练引擎：模型走 ctx.llm（懒取，宿主没挂时给清晰报错）
-	const examChat = createExamChat({ getLlm: () => ctx.get('llm'), logger });
+	// 对练引擎：模型走宿主 llm 服务。
+	// 不能直接 ctx.get('llm')——插件没 inject llm 时取不到，对练就会一直报"没有可用的模型"。
+	// 这里先用懒注入拿到服务，拿不到再退回 getter（宿主没挂 llm 时给出明确提示）。
+	let llmService = null;
+	const safeLlm = () => {
+		if (llmService) return llmService;
+		try { return ctx.get('llm') ?? null; } catch { return null; }
+	};
+	const examChat = createExamChat({ getLlm: safeLlm, logger });
 	const exam = createExam({ store, index, chat: examChat.chat, logger });
+	if (typeof ctx.inject === 'function') {
+		ctx.inject(['llm'], (llmCtx) => {
+			llmService = llmCtx.llm ?? (typeof llmCtx.get === 'function' ? llmCtx.get('llm') : null) ?? null;
+			logger.info?.(`[knowledge-base] 对练已接入模型服务：${llmService ? 'ok' : 'null'}`);
+		});
+	}
 
 	const { routes } = createRoutes({
-		store, index, pipeline, embedder, vision, settings, config, logger, webServer, token, previewer, exam,
+		store, index, pipeline, embedder, vision, settings, config, logger, webServer, token, previewer, exam, examDiag: examChat.diag,
 	});
 	for (const route of routes) {
 		ctx.effect(() => webServer.register(route), `knowledge-base: ${route.path}`);

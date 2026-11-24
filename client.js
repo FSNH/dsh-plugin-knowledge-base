@@ -1139,6 +1139,7 @@ window.__ModuleLoader__.load({
 			const [report, setReport] = React.useState(null);
 			const [board, setBoard] = React.useState([]);
 			const [asking, setAsking] = React.useState(0);
+			const [diag, setDiag] = React.useState(null);
 			const abortRef = React.useRef(null);
 			const listRef = React.useRef(null);
 			const inputRef = React.useRef(null);
@@ -1152,6 +1153,20 @@ window.__ModuleLoader__.load({
 			React.useEffect(() => { if (openTurn) inputRef.current?.focus(); }, [openTurn]);
 
 			const push = (item) => setItems((list) => [...list, item]);
+
+			// 面板打开时问一次宿主：模型能不能用（不能就直说为什么）
+			React.useEffect(() => {
+				let alive = true;
+				(async () => {
+					try {
+						const data = await api('/exam/diag');
+						if (alive) setDiag(data);
+					} catch (err) {
+						if (alive) setDiag({ ok: false, message: err.message || '自检失败' });
+					}
+				})();
+				return () => { alive = false; };
+			}, []);
 
 			function handleEvent(event, data) {
 				if (event === 'question' || event === 'probe') {
@@ -1324,6 +1339,12 @@ window.__ModuleLoader__.load({
 								onChange: (event) => setKbId(event.target.value),
 							}, current.kbs.map((kb) => h('option', { key: kb.id, value: kb.id }, `${kb.name}（${kb.docs ?? 0} 篇）`)))),
 						h('p', { className: 'dsh-kb-hint' }, '暂时只支持单库对练。多库组合和冲突考点在后面的版本里。'),
+					h('div', { className: cx('dsh-kb-examModel', diag && !diag.ok && 'dsh-kb-examModel--bad') },
+						diag === null
+							? '正在检查模型…'
+							: diag.ok
+							? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
+							: `用不了模型：${diag.message ?? '原因未知'}（先在会话里选一个模型，或去设置里配 Key）`),
 						h('div', { className: 'dsh-kb-examActions' },
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
@@ -2372,6 +2393,8 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examWeak{display:flex;flex-direction:column;gap:5px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);}',
 				'.dsh-kb-examWeakTitle{font-size:12px;font-weight:600;}',
 				'.dsh-kb-examWeakRow{display:flex;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examModel{font-size:12px;color:var(--dsw-alias-label-secondary);padding:6px 9px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-examModel--bad{color:#cf222e;background:transparent;border:1px dashed #cf222e;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
