@@ -1470,17 +1470,18 @@ window.__ModuleLoader__.load({
 							type: 'button',
 							className: cx('dsh-kb-gBtn', recordFor?.id === topic.id && sideView === 'quiz' && 'dsh-kb-gBtn--on'),
 							onClick: () => toggleQuiz(topic),
-						}, '题库'),
+						}, '题库')),
+					h('span', { className: 'dsh-kb-viewerGrow' }),
+					h('div', { className: 'dsh-kb-btnGroup' },
 						h('button', {
 							type: 'button', className: 'dsh-kb-gBtn',
 							onClick: () => setDetailFor(open ? '' : topic.id),
-						}, open ? '收起' : '详情')),
-					h('span', { className: 'dsh-kb-viewerGrow' }),
-					h('button', {
-						type: 'button', className: 'dsh-kb-gBtn dsh-kb-gBtn--danger',
-						onClick: () => removeTopic(topic),
-						title: '删除这个学习主题（不动文档）',
-					}, '删除')));
+						}, open ? '收起' : '详情'),
+						h('button', {
+							type: 'button', className: 'dsh-kb-gBtn dsh-kb-gBtn--danger',
+							onClick: () => removeTopic(topic),
+							title: '删除这个学习主题（不动文档）',
+						}, '删除'))));
 				};
 
 				const leftColumn = h('div', {
@@ -2647,6 +2648,8 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-gBtn--primary:hover{filter:brightness(1.08);}',
 				'.dsh-kb-gBtn--danger{flex:none;height:28px;padding:0 12px;border:1px solid transparent;border-radius:9px;background:transparent;color:#cf222e;font:inherit;font-size:12px;cursor:pointer;}',
 				'.dsh-kb-gBtn--danger:hover{border-color:#cf222e;background:rgba(207,34,46,.10);}',
+				'.dsh-kb-gBtn--danger{color:#cf222e;}',
+				'.dsh-kb-gBtnGroup--danger{border-color:rgba(207,34,46,.35);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
