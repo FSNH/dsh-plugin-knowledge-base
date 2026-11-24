@@ -159,6 +159,61 @@ console.log('\n[4] agent 工具');
 	check('缺参数时不崩、返回失败', bad.ok === false && typeof bad.summary === 'string');
 }
 
+console.log('\n[5] 对练记录（每题都要能回看）');
+{
+	const topic = exam.saveTopic({
+		kbId,
+		docIds: ['d_a'],
+		objective: '记录用例主题',
+		outline: [{ id: 'kp1', title: '识别' }],
+		blueprint: [{ kpId: 'kp1', turns: 2, difficulty: 'discern' }],
+		totalTurns: 4,
+	});
+
+	const { runId } = exam.startRun({ topicId: topic.id });
+	check('开一场记录', runId.startsWith('rn_'), runId);
+
+	exam.logTurn({ runId, kpTitle: '识别', question: '这个病的症状是什么？', answer: '梭形病斑', score: 90, verdict: 'full', comment: '答到要害' });
+	exam.logTurn({ runId, question: '该用什么药？', answer: '不记得', score: 20, verdict: 'wrong', comment: '缺药剂' });
+	const one = exam.getRun(runId);
+	check('两题都记下了', one.items.length === 2, String(one.items.length));
+	check('题目原文保留', one.items[0].question.includes('症状'));
+	check('回答与评分保留', one.items[0].answer === '梭形病斑' && one.items[0].score === 90);
+	check('序号自动递增', one.items.map((item) => item.seq).join(',') === '1,2', JSON.stringify(one.items.map((item) => item.seq)));
+
+	const finished = exam.finishRun({ runId, verdict: 'near', summary: '识别没问题，用药要补' });
+	check('结束写结论', finished.verdict === 'near' && finished.turns === 2, JSON.stringify({ v: finished.verdict, t: finished.turns }));
+	check('列表能查到', exam.listRuns(topic.id, 10).some((run) => run.id === runId));
+
+	exam.deleteTopic(topic.id);
+	check('删主题时连记录一起删', exam.getRun(runId) === null);
+	check('删主题后列表也空', exam.listRuns(topic.id, 10).length === 0);
+}
+
+console.log('\n[6] kb_exam_log 工具');
+{
+	const tools = createKnowledgeBaseTools({ store, index, pipeline: { enqueue() {} }, exam });
+	const log = tools.find((item) => item.name === 'kb_exam_log');
+	check('注册了 kb_exam_log', Boolean(log));
+
+	const topic = exam.saveTopic({
+		kbId, docIds: [], objective: '工具记录用例',
+		outline: [{ id: 'kp1', title: '甲' }], blueprint: [], totalTurns: 4,
+	});
+	const started = await log.execute({ action: 'start', topicId: topic.id });
+	check('start 返回 runId', started.ok === true && started.runId.startsWith('rn_'), JSON.stringify(started));
+
+	const turn = await log.execute({
+		action: 'turn', runId: started.runId, question: '第一题？', answer: '我答的', score: 66, verdict: 'partial', comment: '缺一半',
+	});
+	check('turn 记录成功', turn.ok === true && turn.seq === 1, JSON.stringify(turn));
+
+	const done = await log.execute({ action: 'finish', runId: started.runId, verdict: 'near', summary: '还行' });
+	check('finish 记录成功', done.ok === true && done.seq === 1, JSON.stringify(done));
+
+	const bad = await log.execute({ action: 'turn', runId: 'rn_nope', question: 'x' });
+	check('runId 不存在时返回失败而不是崩', bad.ok === false && typeof bad.summary === 'string', JSON.stringify(bad));
+}
 store.close();
 fs.rmSync(root, { recursive: true, force: true });
 

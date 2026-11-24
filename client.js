@@ -1170,6 +1170,10 @@ window.__ModuleLoader__.load({
 			const [busy, setBusy] = React.useState('');
 			const [error, setError] = React.useState('');
 			const [notice, setNotice] = React.useState('');
+			// 对练记录：runsFor = 展开的是哪个主题；openedRun = 正在看的那一次
+			const [runsFor, setRunsFor] = React.useState('');
+			const [runs, setRuns] = React.useState([]);
+			const [openedRun, setOpenedRun] = React.useState(null);
 
 			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
 			const setDocIds = (next) => patch({ examPicked: typeof next === 'function' ? next(docIds) : next });
@@ -1226,6 +1230,27 @@ window.__ModuleLoader__.load({
 				} finally { setBusy(''); }
 			}
 
+			async function toggleRuns(topic) {
+				if (runsFor === topic.id) { setRunsFor(''); setRuns([]); setOpenedRun(null); return; }
+				setRunsFor(topic.id); setRuns([]); setOpenedRun(null);
+				try {
+					const data = await api(`/exam/runs?topicId=${encodeURIComponent(topic.id)}`);
+					setRuns(data.runs || []);
+				} catch (err) {
+					setError(friendly(err));
+				}
+			}
+
+			async function openRun(run) {
+				if (openedRun?.id === run.id) { setOpenedRun(null); return; }
+				try {
+					const data = await api(`/exam/run?id=${encodeURIComponent(run.id)}`);
+					setOpenedRun(data.run);
+				} catch (err) {
+					setError(friendly(err));
+				}
+			}
+
 			async function startChat(topic) {
 				setError('');
 				try {
@@ -1277,6 +1302,64 @@ window.__ModuleLoader__.load({
 			// ① 卡片列表
 			if (view === 'list') {
 				const list = topics ?? [];
+
+				const runDetail = (run) => {
+					if (openedRun?.id !== run.id || !openedRun.items?.length) return null;
+					return h('div', { className: 'dsh-kb-runBody' },
+						openedRun.items.map((item) => h('div', { key: item.id, className: 'dsh-kb-runItem' },
+							h('div', { className: 'dsh-kb-runQ' },
+								h('span', { className: 'dsh-kb-runNo' }, `Q${item.seq}`),
+								item.kpTitle ? h('span', { className: 'dsh-kb-runKp' }, item.kpTitle) : null,
+								h('span', null, item.question)),
+							item.answer ? h('div', { className: 'dsh-kb-runA' }, `答：${item.answer}`) : null,
+							h('div', { className: 'dsh-kb-runG' },
+								item.score != null ? h('span', { className: 'dsh-kb-runScore' }, `${item.score} 分`) : null,
+								item.comment ? h('span', null, item.comment) : null))));
+				};
+
+				const runList = (topic) => {
+					if (runsFor !== topic.id) return null;
+					return h('div', { className: 'dsh-kb-runList' },
+						runs.length === 0
+							? h('p', { className: 'dsh-kb-hint' }, '还没有对练记录。开一场对练，AI 会把每道题都记下来。')
+							: runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
+								h('button', {
+									type: 'button',
+									className: cx('dsh-kb-runHead', openedRun?.id === run.id && 'dsh-kb-runHead--on'),
+									onClick: () => openRun(run),
+								},
+									h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
+									h('span', { className: 'dsh-kb-runMeta' },
+										`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}`)),
+								runDetail(run))));
+				};
+
+				const card = (topic) => h('div', { key: topic.id, className: 'dsh-kb-topic' },
+					h('div', { className: 'dsh-kb-topicHead' },
+						h('div', { className: 'dsh-kb-topicTitle' }, topic.objective),
+						h('span', { className: 'dsh-kb-viewerGrow' }),
+						h('button', {
+							type: 'button', className: 'dsh-kb-examMini',
+							onClick: () => removeTopic(topic),
+							title: '删除这个学习主题（不动文档）',
+						}, '删除')),
+					h('div', { className: 'dsh-kb-topicMeta' },
+						`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
+					h('div', { className: 'dsh-kb-topicKps' },
+						topic.outline.map((kp, index) => h('span', { key: kp.id ?? index, className: 'dsh-kb-topicKp' },
+							`${index + 1}. ${kp.title}`))),
+					h('div', { className: 'dsh-kb-topicFoot' },
+						h('button', {
+							type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+							onClick: () => startChat(topic),
+						}, '开始 AI 对练'),
+						h('button', {
+							type: 'button', className: 'dsh-kb-examMini',
+							onClick: () => toggleRuns(topic),
+						}, runsFor === topic.id ? '收起记录' : '对练记录'),
+						h('span', { className: 'dsh-kb-hint' }, '会打开会话，把考官 prompt 预填进去')),
+					runList(topic));
+
 				return h('div', { className: 'dsh-kb-exam' },
 					h('div', { className: 'dsh-kb-examHead' },
 						h('div', { className: 'dsh-kb-examTitle' }, '学习主题'),
@@ -1299,27 +1382,7 @@ window.__ModuleLoader__.load({
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								onClick: () => { setView('scope'); setError(''); setNotice(''); },
 							}, '新建学习主题'))
-						: h('div', { className: 'dsh-kb-topicList' },
-							list.map((topic) => h('div', { key: topic.id, className: 'dsh-kb-topic' },
-								h('div', { className: 'dsh-kb-topicHead' },
-									h('div', { className: 'dsh-kb-topicTitle' }, topic.objective),
-									h('span', { className: 'dsh-kb-viewerGrow' }),
-									h('button', {
-										type: 'button', className: 'dsh-kb-examMini',
-										onClick: () => removeTopic(topic),
-										title: '删除这个学习主题（不动文档）',
-									}, '删除')),
-								h('div', { className: 'dsh-kb-topicMeta' },
-									`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
-								h('div', { className: 'dsh-kb-topicKps' },
-									topic.outline.map((kp, index) => h('span', { key: kp.id ?? index, className: 'dsh-kb-topicKp' },
-										`${index + 1}. ${kp.title}`))),
-								h('div', { className: 'dsh-kb-topicFoot' },
-									h('button', {
-										type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-										onClick: () => startChat(topic),
-									}, '开始 AI 对练'),
-									h('span', { className: 'dsh-kb-hint' }, '会打开会话，把考官 prompt 预填进去'))))));
+						: h('div', { className: 'dsh-kb-topicList' }, list.map(card)));
 			}
 
 			// ② 选范围 → 交给会话
@@ -2308,6 +2371,20 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-outlineMeta{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-examObjPoints{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}',
 				'.dsh-kb-examObjPoint{padding:1px 7px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-runList{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--dsw-alias-border-l1);}',
+				'.dsh-kb-run{display:flex;flex-direction:column;gap:4px;}',
+				'.dsh-kb-runHead{display:flex;align-items:center;gap:8px;padding:5px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;text-align:left;}',
+				'.dsh-kb-runHead--on{border-color:var(--dsw-alias-label-brand,#1f6feb);background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-runTime{color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-runMeta{margin-left:auto;color:var(--dsw-alias-label-secondary);font-size:11.5px;}',
+				'.dsh-kb-runBody{display:flex;flex-direction:column;gap:6px;padding:6px 8px 2px;}',
+				'.dsh-kb-runItem{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-bottom:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-runQ{display:flex;gap:6px;font-size:12.5px;line-height:1.6;}',
+				'.dsh-kb-runNo{flex:none;color:var(--dsw-alias-label-secondary);font-size:11.5px;}',
+				'.dsh-kb-runKp{flex:none;padding:0 6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-runA{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.6;}',
+				'.dsh-kb-runG{display:flex;gap:8px;font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-runScore{flex:none;font-weight:600;color:var(--dsw-alias-label-primary);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
