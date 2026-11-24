@@ -19,6 +19,7 @@ import { openStore } from '../lib/store.mjs';
 import { createIndex } from '../lib/index.mjs';
 import { renderDocument, chunkDocument } from '../lib/chunker.mjs';
 import { createExam } from '../lib/exam/engine.mjs';
+import { createKnowledgeBaseTools } from '../lib/tools.mjs';
 
 const live = process.argv.includes('--live');
 
@@ -262,6 +263,49 @@ console.log('\n[7] 模型不按 JSON 输出时的兜底');
 	try { await exam2.suggestObjectives({ kbId }); } catch (error) { message = String(error?.message ?? ''); }
 	check('连续失败会报错', message.length > 0);
 	check('错误里带上模型原话', message.includes('无法完成') || message.includes('不会输出'), message);
+}
+
+console.log('\n[8] 学习主题：对话设计 + 落库');
+{
+	const design = exam.designPrompt({ kbId, docIds: ['d_blast'] });
+	check('design prompt 带 kbId', design.prompt.includes(kbId));
+	check('design prompt 要求调用 kb_topic_save', design.prompt.includes('kb_topic_save'));
+	check('design prompt 带上 docIds', design.prompt.includes('d_blast'));
+	check('design prompt 要求先确认再保存', design.prompt.includes('确认'));
+
+	const saved = exam.saveTopic({
+		kbId,
+		docIds: ['d_blast'],
+		objective: '能向客户完整讲清玉米大斑病的识别与防治',
+		outline: [
+			{ id: 'kp1', title: '症状辨识', docIds: [] },
+			{ id: 'kp2', title: '药剂选择', docIds: [] },
+		],
+		blueprint: [{ kpId: 'kp1', turns: 2, difficulty: 'discern' }],
+	});
+	check('保存后能读回', exam.getTopic(saved.id)?.objective.includes('大斑病'));
+	check('列表里有它', exam.listTopics(50).some((item) => item.id === saved.id));
+
+	const prompt = exam.topicPrompt(saved.id);
+	check('考官 prompt 带大纲', prompt.prompt.includes('症状辨识') && prompt.prompt.includes('药剂选择'));
+	check('考官 prompt 限制一次一题', prompt.prompt.includes('一次只问一道题'));
+
+	const tools = createKnowledgeBaseTools({ store, index, pipeline: { enqueue() {} }, exam });
+	const saveTool = tools.find((item) => item.name === 'kb_topic_save');
+	const listTool = tools.find((item) => item.name === 'kb_topic_list');
+	check('注册了 kb_topic_save / kb_topic_list', Boolean(saveTool) && Boolean(listTool));
+
+	const result = await saveTool.execute({
+		kbId,
+		docIds: ['d_blast'],
+		objective: '能独立完成大斑病的田间诊断',
+		outline: [{ title: '田间症状', turns: 2, difficulty: 'apply' }, { title: '用药时机' }],
+	});
+	check('工具能落库', result.ok === true && result.topicId.startsWith('tp_'), JSON.stringify(result));
+	const listed = await listTool.execute({});
+	check('工具能列出主题', listed.topics.length >= 2, String(listed.topics.length));
+
+	check('删掉一个', exam.deleteTopic(saved.id).removed === 1);
 }
 
 store.close();

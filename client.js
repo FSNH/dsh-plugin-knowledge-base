@@ -1160,22 +1160,18 @@ window.__ModuleLoader__.load({
 
 		/** 新文件/新文件夹落在哪：选中的文件夹 → 选中文件所在目录 → 根。 */
 		// ── 学习主题（对练）────────────────────────────────────────────────
-		// 前三个步骤在面板里完成（选范围 → 定目标 → 确认大纲），存成卡片；
-		// 对练本身交给 DSH 会话：卡片上「开始 AI 对练」会把考官 prompt 预填进输入框。
+		// 面板只做两件事：① 选范围 ② 管卡片。
+		// 定目标、拆大纲全部交给 DSH 会话（agent 用 kb_search/kb_read 读库，
+		// 谈定后调用 kb_topic_save 把结果写回知识库）。
 		function Exam() {
 			const current = useStore();
 			const [view, setView] = React.useState('list');
 			const [topics, setTopics] = React.useState(null);
-			const [objective, setObjective] = React.useState('');
-			const [candidates, setCandidates] = React.useState([]);
-			const [outline, setOutline] = React.useState([]);
-			const [blueprint, setBlueprint] = React.useState([]);
 			const [busy, setBusy] = React.useState('');
 			const [error, setError] = React.useState('');
 			const [diag, setDiag] = React.useState(null);
 			const [notice, setNotice] = React.useState('');
 
-			// 勾选状态在共享 store 里（左侧文件树负责勾）
 			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
 			const setDocIds = (next) => patch({ examPicked: typeof next === 'function' ? next(docIds) : next });
 			const kbId = current.kbId || '';
@@ -1197,7 +1193,6 @@ window.__ModuleLoader__.load({
 				return () => { alive = false; };
 			}, []);
 
-			// 换库或文档增减：去掉失效勾选，换库后默认全选
 			React.useEffect(() => {
 				const ids = (current.nodes || []).filter((node) => node.kind === 'doc').map((node) => node.id);
 				const kept = (current.examPicked || []).filter((id) => ids.includes(id));
@@ -1205,67 +1200,34 @@ window.__ModuleLoader__.load({
 			}, [current.kbId, (current.nodes || []).length]);
 
 			async function loadTopics() {
+				setBusy((value) => value || '正在读…');
 				try {
 					const data = await api('/exam/topics');
 					setTopics(data.topics || []);
 				} catch (err) {
 					setError(err.message || '读取学习主题失败');
 					setTopics([]);
-				}
+				} finally { setBusy(''); }
 			}
 			React.useEffect(() => { loadTopics(); }, []);
 
-			async function suggest() {
+			/** 选好范围后：不在这里调模型，直接开一个会话让 AI 和用户一起定目标、拆大纲。 */
+			async function startDesign() {
 				if (!current.kbId) { setError('先在左边选一个知识库'); return; }
 				if (!docIds.length) { setError('先在左边勾选要考的文档'); return; }
-				setError(''); setBusy('正在读这些文档…');
+				setError(''); setBusy('正在准备会话…');
 				try {
-					const data = await api('/exam/suggest', {
-						method: 'POST',
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, docIds }),
-					});
-					setCandidates(data.objectives || []);
-					if (!objective) setObjective(data.objectives?.[0]?.text ?? '');
-					setView('objective');
+					const url = `/exam/topic/design-prompt?kbId=${encodeURIComponent(kbId)}`
+						+ `&docIds=${encodeURIComponent(docIds.join(','))}`;
+					const data = await api(url);
+					if (typeof sessionStarter !== 'function') {
+						setError('会话服务还没就绪，稍后再点一次');
+						return;
+					}
+					sessionStarter(data.prompt);
+					setNotice('已打开会话：和 AI 把目标和大纲谈定，它会把结果写回知识库');
 				} catch (err) {
-					setError(err.message || '提议目标失败');
-				} finally { setBusy(''); }
-			}
-
-			async function buildOutline() {
-				const text = objective.trim();
-				if (!text) { setError('写一个学习目标'); return; }
-				setError(''); setBusy('正在拆知识点…');
-				try {
-					const data = await api('/exam/plan', {
-						method: 'POST',
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, objective: text, docIds }),
-					});
-					setOutline(data.outline || []);
-					setBlueprint(data.blueprint || []);
-					setView('outline');
-				} catch (err) {
-					setError(err.message || '生成大纲失败');
-				} finally { setBusy(''); }
-			}
-
-			async function saveTopic() {
-				if (!outline.length) { setError('大纲是空的，至少留一个知识点'); return; }
-				setError(''); setBusy('正在保存…');
-				try {
-					await api('/exam/topics', {
-						method: 'POST',
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, docIds, objective: objective.trim(), outline, blueprint }),
-					});
-					await loadTopics();
-					setView('list');
-					setNotice('学习主题已保存，点卡片上的「开始 AI 对练」就能开练');
-					setObjective(''); setCandidates([]); setOutline([]); setBlueprint([]);
-				} catch (err) {
-					setError(err.message || '保存失败');
+					setError(err.message || '开会话失败');
 				} finally { setBusy(''); }
 			}
 
@@ -1285,31 +1247,23 @@ window.__ModuleLoader__.load({
 			}
 
 			async function removeTopic(topic) {
+				const doDelete = async () => {
+					try {
+						await api('/exam/topic/delete', {
+							method: 'POST',
+							headers: { 'content-type': 'application/json' },
+							body: JSON.stringify({ id: topic.id }),
+						});
+						await loadTopics();
+					} catch (err) {
+						setError(err.message || '删除失败');
+					}
+				};
 				if (typeof askConfirm === 'function') {
-					askConfirm(`删除学习主题「${topic.objective.slice(0, 20)}…」？只删卡片，不动文档。`, async () => {
-						try {
-							await api('/exam/topic/delete', {
-								method: 'POST',
-								headers: { 'content-type': 'application/json' },
-								body: JSON.stringify({ id: topic.id }),
-							});
-							await loadTopics();
-						} catch (err) {
-							setError(err.message || '删除失败');
-						}
-					});
+					askConfirm(`删除学习主题「${String(topic.objective).slice(0, 20)}…」？只删卡片，不动文档。`, doDelete);
 					return;
 				}
-				try {
-					await api('/exam/topic/delete', {
-						method: 'POST',
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ id: topic.id }),
-					});
-					await loadTopics();
-				} catch (err) {
-					setError(err.message || '删除失败');
-				}
+				await doDelete();
 			}
 
 			const errorBar = error
@@ -1324,14 +1278,13 @@ window.__ModuleLoader__.load({
 					h('button', { type: 'button', className: 'dsh-kb-bannerClose', onClick: () => setNotice('') },
 						h(Icon, { name: 'close', size: 12 })))
 				: null;
-
 			const modelLine = h('div', { className: cx('dsh-kb-examModel', diag && diag.ready === false && 'dsh-kb-examModel--bad') },
 				h(Icon, { name: diag && diag.ready === false ? 'warn' : 'spark', size: 13 }),
 				h('span', null, diag === null
 					? '正在检查模型…'
 					: diag.ready !== false
-						? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
-						: `用不了模型：${diag.message ?? '原因未知'}（先去设置里配一个）`));
+						? `思考用模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
+						: `模型不可用：${diag.message ?? '原因未知'}（会话里可以换一个）`));
 
 			// ① 卡片列表
 			if (view === 'list') {
@@ -1341,6 +1294,7 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'dsh-kb-examTitle' }, '学习主题'),
 						h('span', { className: 'dsh-kb-examScopeLabel' }, topics === null ? '加载中…' : `${list.length} 个`),
 						h('span', { className: 'dsh-kb-viewerGrow' }),
+						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: loadTopics, title: '刷新' }, '刷新'),
 						h('button', {
 							type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 							onClick: () => { setView('scope'); setError(''); setNotice(''); },
@@ -1352,7 +1306,7 @@ window.__ModuleLoader__.load({
 							h(Icon, { name: 'book', size: 22 }),
 							h('p', { className: 'dsh-kb-examLead' }, '还没有学习主题。'),
 							h('p', { className: 'dsh-kb-hint' },
-								'建一个：选好要考的文件 → 定一个学习目标 → 确认大纲，存成卡片，随时点开练。'),
+								'建一个：选好要考的文件 → 打开会话，和 AI 把目标与大纲谈定 → 它写回这里，然后随时点开练。'),
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								onClick: () => { setView('scope'); setError(''); setNotice(''); },
@@ -1377,123 +1331,43 @@ window.__ModuleLoader__.load({
 										type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 										onClick: () => startChat(topic),
 									}, '开始 AI 对练'),
-									h('span', { className: 'dsh-kb-hint' }, '会打开一个会话，把考官 prompt 预填进去'))))));
+									h('span', { className: 'dsh-kb-hint' }, '会打开会话，把考官 prompt 预填进去'))))));
 			}
 
-			// ② 选范围（勾选在左边文件树里做）
-			if (view === 'scope') {
-				return h('div', { className: 'dsh-kb-exam' },
-					h('div', { className: 'dsh-kb-examHead' },
-						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setView('list') }, '← 返回'),
-						h('div', { className: 'dsh-kb-examTitle' }, '第 1 步 · 选范围'),
-						h('span', { className: 'dsh-kb-examScopeLabel' }, `${kbName} · 已选 ${picked.length}/${docs.length} 篇`),
-						h('span', { className: 'dsh-kb-viewerGrow' }),
-						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds(docs.map((doc) => doc.id)) }, '全选'),
-						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
-					errorBar,
-					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, '在左边文件树里勾选要考的文件（文件夹可以整块勾）。'),
-						h('div', { className: 'dsh-kb-examPicks' },
-							!current.kbId
-								? h('p', { className: 'dsh-kb-hint' }, '先在左边选一个知识库。')
-								: docs.length === 0
-									? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
-									: picked.length === 0
-										? h('p', { className: 'dsh-kb-hint' }, '左边还没勾选任何文件。')
-										: picked.map((doc) => h('div', { key: doc.id, className: 'dsh-kb-examPick', title: doc.name },
-											h('span', { className: 'dsh-kb-examDocExt' }, String(doc.ext || '').replace(/^\./, '').toUpperCase() || 'FILE'),
-											h('span', { className: 'dsh-kb-examPickName' }, doc.name),
-											h('span', { className: 'dsh-kb-examPickMeta' }, doc.chars ? size(doc.chars) : '—')))),
-						modelLine,
-						h('div', { className: 'dsh-kb-examFoot' },
-							h('span', { className: 'dsh-kb-examFootHint' }, `将用 ${picked.length} 篇`),
-							h('button', {
-								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-								disabled: Boolean(busy) || !current.kbId || !picked.length,
-								onClick: suggest,
-							}, busy || '下一步：定目标'))));
-			}
-
-			// ③ 定目标
-			if (view === 'objective') {
-				return h('div', { className: 'dsh-kb-exam' },
-					h('div', { className: 'dsh-kb-examHead' },
-						h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setView('scope') }, '← 上一步'),
-						h('div', { className: 'dsh-kb-examTitle' }, '第 2 步 · 定目标')),
-					errorBar,
-					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, '练完要能整体做到什么？三条候选覆盖不同侧重，挑一个或自己写——目标要能覆盖多个知识点，别写成单个事实。'),
-						candidates.map((item, index) => h('button', {
-							key: index,
-							type: 'button',
-							className: cx('dsh-kb-examObj', objective === item.text && 'dsh-kb-examObj--on'),
-							onClick: () => setObjective(item.text),
-						},
-							h('span', { className: 'dsh-kb-examObjText' }, item.text),
-							item.points?.length
-								? h('span', { className: 'dsh-kb-examObjPoints' },
-									item.points.map((point, i) => h('span', { key: i, className: 'dsh-kb-examObjPoint' }, point)))
-								: null,
-							h('span', { className: 'dsh-kb-examObjMeta' },
-								`${item.coverage === 'high' ? '覆盖度高' : item.coverage === 'low' ? '覆盖度低' : '覆盖度中'}${item.why ? ` · ${item.why}` : ''}`))),
-						h('label', { className: 'dsh-kb-examField dsh-kb-examField--stack' },
-							h('span', null, '学习目标'),
-							h('textarea', {
-								className: 'dsh-kb-examTextarea',
-								rows: 3,
-								value: objective,
-								placeholder: '例：能根据症状区分玉米大斑病与丝黑穗病，并说出对应防治措施',
-								onChange: (event) => setObjective(event.target.value),
-							})),
-						h('div', { className: 'dsh-kb-examFoot' },
-							h('span', { className: 'dsh-kb-examFootHint' }, objective.trim() ? `${objective.trim().length} 字` : '还没写'),
-							h('button', {
-								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-								disabled: Boolean(busy) || !objective.trim(),
-								onClick: buildOutline,
-							}, busy || '下一步：确认大纲'))));
-			}
-
-			// ④ 确认大纲 → 保存成卡片
+			// ② 选范围 → 交给会话
 			return h('div', { className: 'dsh-kb-exam' },
 				h('div', { className: 'dsh-kb-examHead' },
-					h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setView('objective') }, '← 上一步'),
-					h('div', { className: 'dsh-kb-examTitle' }, '第 3 步 · 确认大纲'),
-					h('span', { className: 'dsh-kb-examScopeLabel' }, `${outline.length} 个知识点`)),
+					h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setView('list') }, '← 返回'),
+					h('div', { className: 'dsh-kb-examTitle' }, '选范围'),
+					h('span', { className: 'dsh-kb-examScopeLabel' }, `${kbName} · 已选 ${picked.length}/${docs.length} 篇`),
+					h('span', { className: 'dsh-kb-viewerGrow' }),
+					h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds(docs.map((doc) => doc.id)) }, '全选'),
+					h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
 				errorBar,
+				noticeBar,
 				h('div', { className: 'dsh-kb-examCard' },
-					h('p', { className: 'dsh-kb-examLead' }, objective),
-					h('div', { className: 'dsh-kb-outlineList' },
-						outline.map((kp, index) => {
-							const plan = blueprint.find((item) => item.kpId === kp.id) ?? {};
-							return h('div', { key: kp.id ?? index, className: 'dsh-kb-outlineRow' },
-								h('span', { className: 'dsh-kb-outlineNo' }, String(index + 1)),
-								h('input', {
-									className: 'dsh-kb-outlineInput',
-									value: kp.title,
-									onChange: (event) => {
-										const next = event.target.value;
-										setOutline((list) => list.map((item, i) => (i === index ? { ...item, title: next } : item)));
-									},
-								}),
-								h('span', { className: 'dsh-kb-outlineMeta' }, `${plan.turns ?? 2} 题 · ${plan.difficulty ?? 'discern'}`),
-								h('button', {
-									type: 'button', className: 'dsh-kb-examMini',
-									onClick: () => {
-										const removed = outline[index];
-										setOutline((list) => list.filter((_, i) => i !== index));
-										setBlueprint((list) => list.filter((item) => item.kpId !== removed?.id));
-									},
-								}, '删'));
-						})),
-					h('p', { className: 'dsh-kb-hint' }, '保存后就是一张卡片；对练在会话里进行，AI 会按这个顺序考。'),
+					h('p', { className: 'dsh-kb-examLead' }, '在左边文件树里勾选要考的文件（文件夹可以整块勾）。'),
+					h('div', { className: 'dsh-kb-examPicks' },
+						!current.kbId
+							? h('p', { className: 'dsh-kb-hint' }, '先在左边选一个知识库。')
+							: docs.length === 0
+								? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
+								: picked.length === 0
+									? h('p', { className: 'dsh-kb-hint' }, '左边还没勾选任何文件。')
+									: picked.map((doc) => h('div', { key: doc.id, className: 'dsh-kb-examPick', title: doc.name },
+										h('span', { className: 'dsh-kb-examDocExt' }, String(doc.ext || '').replace(/^\./, '').toUpperCase() || 'FILE'),
+										h('span', { className: 'dsh-kb-examPickName' }, doc.name),
+										h('span', { className: 'dsh-kb-examPickMeta' }, doc.chars ? size(doc.chars) : '—')))),
+					h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
+						'下一步不在面板里做：会打开一个会话，AI 自己读这些文档，和你把学习目标与大纲谈定，然后写回知识库。'),
+					modelLine,
 					h('div', { className: 'dsh-kb-examFoot' },
-						h('span', { className: 'dsh-kb-examFootHint' }, `${picked.length} 篇 · ${outline.length} 个知识点`),
+						h('span', { className: 'dsh-kb-examFootHint' }, `将用 ${picked.length} 篇 · ${size(picked.reduce((sum, doc) => sum + (doc.chars || 0), 0))}`),
 						h('button', {
 							type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-							disabled: Boolean(busy) || !outline.length,
-							onClick: saveTopic,
-						}, busy || '保存学习主题'))));
+							disabled: Boolean(busy) || !current.kbId || !picked.length,
+							onClick: startDesign,
+						}, busy || '在对话里定目标和大纲'))));
 		}
 
 

@@ -107,7 +107,7 @@ export function apply(ctx, config = {}) {
 	}
 
 	// ── 模型工具 ───────────────────────────────────────────────────────────
-	const tools = createKnowledgeBaseTools({ store, index, pipeline });
+	const tools = createKnowledgeBaseTools({ store, index, pipeline, exam });
 	if (typeof ctx.inject === 'function') {
 		ctx.inject(['tools'], (toolCtx) => {
 			for (const definition of tools) {
