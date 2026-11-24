@@ -1472,6 +1472,7 @@ window.__ModuleLoader__.load({
 								type: 'button', className: 'dsh-kb-examMini',
 								onClick: () => setDetailFor(open ? '' : topic.id),
 							}, open ? '收起详情' : '详情'),
+							h('span', { className: 'dsh-kb-divider' }),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
 								onClick: () => removeTopic(topic),
@@ -2632,6 +2633,7 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-quizOption--right{background:rgba(35,134,54,.14);color:#2da44e;font-weight:500;}',
 				'.dsh-kb-quizKey{flex:none;font-weight:600;}',
 				'.dsh-kb-quizWhy{font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-secondary);padding:6px 8px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-divider{flex:none;width:1px;height:18px;background:var(--dsw-alias-border-l1);margin:0 2px;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
