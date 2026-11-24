@@ -1445,7 +1445,7 @@ window.__ModuleLoader__.load({
 				// 右列只在点了「对练记录」之后才存在，默认不占位、不空着
 				const rightColumn = !recordFor ? null : h('div', {
 					className: 'dsh-kb-examSide',
-					style: { flex: '0 0 auto', width: `min(${sideWidth}px, 46vw)`, display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--dsw-alias-border-l1)', borderRadius: '12px', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' },
+					style: { flex: '0 0 auto', width: `min(${sideWidth}px, 46vw)`, display: 'flex', flexDirection: 'column', padding: '12px 14px', borderLeft: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' },
 				},
 					h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
 					h('div', { className: 'dsh-kb-examSideInner', style: { display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 } },
