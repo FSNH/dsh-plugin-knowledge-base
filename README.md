@@ -89,6 +89,10 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 > Office 原版式预览依赖 DSH 自带的 LibreOffice（`officeKit`）：没有它也能用，只是 Office 文档只能看抽取出来的文字。
 > **包名 ≠ 仓库名**：npm 上的 `dsh-plugin-knowledge-base` 已被别人的包占用，所以包名带 `@xiaofanzhao/` 作用域；仓库名保持不变。
 
+## 版本历史
+
+每个版本改了什么见 [CHANGELOG.md](./CHANGELOG.md)。
+
 ## 打包与发布
 
 插件本身就是一个标准的 DSH bundle：`package.json` 里 `dsh.bundle.patch` 指向自带的 `cordis.patch.yml`，`dsh.client` 声明浏览器半部。
