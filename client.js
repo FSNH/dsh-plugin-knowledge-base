@@ -1438,14 +1438,14 @@ window.__ModuleLoader__.load({
 							}, '新建学习主题'))
 						: h('div', {
 							className: 'dsh-kb-topicList',
-							style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px', alignItems: 'stretch' },
+							style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '10px', alignItems: 'stretch' },
 						},
 							list.map(card)));
 
 				// 右列只在点了「对练记录」之后才存在，默认不占位、不空着
 				const rightColumn = !recordFor ? null : h('div', {
 					className: 'dsh-kb-examSide',
-					style: { flex: '0 0 auto', width: `${sideWidth}px`, display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--dsw-alias-border-l1)', borderRadius: '12px', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' },
+					style: { flex: '0 0 auto', width: `min(${sideWidth}px, 46vw)`, display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--dsw-alias-border-l1)', borderRadius: '12px', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' },
 				},
 					h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
 					h('div', { className: 'dsh-kb-examSideInner', style: { display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 } },
@@ -2176,7 +2176,7 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-btn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;cursor:pointer;text-decoration:none;white-space:nowrap;}',
 				'.dsh-kb-btn:hover{background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-btn:disabled{opacity:.5;cursor:default;}',
-				'.dsh-kb-btn--primary{border-color:transparent;background:var(--dsw-alias-label-brand,#1f6feb);color:#fff;}',
+				'.dsh-kb-btn--primary{white-space:nowrap;border-color:transparent;background:var(--dsw-alias-label-brand,#1f6feb);color:#fff;}',
 				'.dsh-kb-btn--primary:hover{filter:brightness(1.06);background:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-btn--danger{color:var(--dsw-alias-label-danger,#d14343);}',
 				'.dsh-kb-banner{display:flex;align-items:center;gap:8px;padding:7px 16px;font-size:12px;border-bottom:1px solid var(--dsw-alias-border-l1);}',
@@ -2414,7 +2414,7 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examModel{font-size:12px;color:var(--dsw-alias-label-secondary);padding:6px 9px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-examModel--bad{color:#cf222e;background:transparent;border:1px dashed #cf222e;}',
 				'.dsh-kb-examScope{display:flex;align-items:center;gap:8px;font-size:12.5px;}',
-				'.dsh-kb-examScopeLabel{color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examScopeLabel{color:var(--dsw-alias-label-secondary);flex:none;white-space:nowrap;}',
 				'.dsh-kb-examScopeBtn{padding:2px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:11.5px;cursor:pointer;}',
 				'.dsh-kb-examScopeBtn:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-examDocs{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow:auto;padding:4px 2px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;}',
@@ -2426,8 +2426,8 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examMode{display:flex;flex-wrap:wrap;gap:8px;}',
 				'.dsh-kb-examModeItem{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;font-size:12.5px;cursor:pointer;}',
 				'.dsh-kb-examModeItem--on{border-color:var(--dsw-alias-label-brand,#1f6feb);background:var(--dsw-alias-bg-layer-2);}',
-				'.dsh-kb-examHead{display:flex;align-items:center;gap:8px;}',
-				'.dsh-kb-examTitle{font-size:13px;font-weight:600;}',
+				'.dsh-kb-examHead{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;min-width:0;}',
+				'.dsh-kb-examTitle{font-size:14px;font-weight:600;flex:none;white-space:nowrap;}',
 				'.dsh-kb-examKb{max-width:220px;}',
 				'.dsh-kb-examModes{display:grid;grid-template-columns:1fr 1fr;gap:8px;}',
 				'.dsh-kb-examModeCard{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;}',
@@ -2440,7 +2440,7 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examPickerBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}',
 				'.dsh-kb-examPickerCount{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-examFilter{height:24px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:11.5px;max-width:180px;}',
-				'.dsh-kb-examMini{padding:2px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:11px;cursor:pointer;}',
+				'.dsh-kb-examMini{padding:2px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:11px;cursor:pointer;flex:none;white-space:nowrap;}',
 				'.dsh-kb-examMini:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-examDoc--on{background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-examDocExt{width:36px;flex:none;font-size:10px;letter-spacing:.02em;color:var(--dsw-alias-label-secondary);}',
