@@ -1310,10 +1310,14 @@ window.__ModuleLoader__.load({
 			}
 
 			// 拖左边缘调宽：侧栏贴在右边，所以宽度 = 视口右边到指针的距离
-			// 菜单开着时，点页面其它地方就收起
+			// 菜单开着时，点菜单以外的地方就收起（点在菜单/⋯ 上不处理，否则 click 到不了菜单项）
 			React.useEffect(() => {
 				if (!menuFor) return undefined;
-				const close = () => setMenuFor('');
+				const close = (event) => {
+					const target = event.target;
+					if (target instanceof Element && target.closest('.dsh-kb-menuWrap')) return;
+					setMenuFor('');
+				};
 				window.addEventListener('mousedown', close);
 				return () => window.removeEventListener('mousedown', close);
 			}, [menuFor]);
