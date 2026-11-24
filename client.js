@@ -1173,6 +1173,8 @@ window.__ModuleLoader__.load({
 			// 对练记录：runsFor = 展开的是哪个主题；openedRun = 正在看的那一次
 			const [runs, setRuns] = React.useState([]);
 			const [openedRun, setOpenedRun] = React.useState(null);
+			const [recordFor, setRecordFor] = React.useState(null);
+			const [sideWidth, setSideWidth] = React.useState(356);
 
 			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
 			const setDocIds = (next) => patch({ examPicked: typeof next === 'function' ? next(docIds) : next });
