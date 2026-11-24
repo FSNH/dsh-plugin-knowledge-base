@@ -507,10 +507,10 @@ console.log('\n[9] 对练面板');
 	// 容器 class 是 dsh-kb-examSteps，步骤本身是 dsh-kb-examStep（后面可能跟 --on/--done）
 	const stepNodes = exam.filter((node) => /^dsh-kb-examStep(\s|$)/.test(String(node.props?.className || '')));
 	check('步骤条有 5 步', stepNodes.length === 5, `实际 ${stepNodes.length}`);
-	check('有范围选择（全选/清空）', exam.some((node) => String(node.props?.children || '') === '全选')
-		&& exam.some((node) => String(node.props?.children || '') === '清空'));
-	check('按文件勾选而不是选库', exam.filter((node) => String(node.props?.className || '') === 'dsh-kb-examDoc').length >= 1);
-	check('说明勾选规则', exam.some((node) => String(node.props?.children || '').includes('就只考哪几篇')));
+	check('有「整个知识库」这一档', exam.some((node) => String(node.props?.children || '').includes('整个知识库')));
+	check('有「只挑其中几篇」这一档', exam.some((node) => String(node.props?.children || '').includes('只挑其中几篇')));
+	check('两档是单选（radio）', exam.filter((node) => node.props?.type === 'radio').length >= 2);
+	check('面板里能换知识库', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examScope'));
 	internals.patch({ examOpen: false });
 }
 

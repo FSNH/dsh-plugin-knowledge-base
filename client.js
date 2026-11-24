@@ -1141,6 +1141,7 @@ window.__ModuleLoader__.load({
 			const [asking, setAsking] = React.useState(0);
 			const [diag, setDiag] = React.useState(null);
 			const [docIds, setDocIds] = React.useState([]);
+			const [scopeMode, setScopeMode] = React.useState('kb');
 			const abortRef = React.useRef(null);
 			const listRef = React.useRef(null);
 			const inputRef = React.useRef(null);
@@ -1231,7 +1232,7 @@ window.__ModuleLoader__.load({
 					const data = await api('/exam/suggest', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, docIds }),
+						body: JSON.stringify({ kbId, docIds: scopeMode === 'files' ? docIds : [] }),
 					});
 					setObjectives(data.objectives || []);
 					setPicked(-1);
@@ -1250,7 +1251,7 @@ window.__ModuleLoader__.load({
 					const data = await api('/exam/start', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, objective: text, docIds }),
+						body: JSON.stringify({ kbId, objective: text, docIds: scopeMode === 'files' ? docIds : [] }),
 					});
 					setPlan(data);
 					setStep('outline');
@@ -1333,38 +1334,57 @@ window.__ModuleLoader__.load({
 			// ① 选库
 			if (step === 'setup') {
 				const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
+				const kbName = current.kbs.find((kb) => kb.id === kbId)?.name ?? '未选库';
+				const wholeKb = scopeMode === 'kb';
+				const canStart = docs.length > 0 && (wholeKb || docIds.length > 0);
 				return h('div', { className: 'dsh-kb-exam' },
 					stepsBar,
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, '左边已经选好知识库了。勾上要考的文件，我读这几篇，给你三个学习目标。'),
+						h('p', { className: 'dsh-kb-examLead' }, '选范围：整个知识库，或者只挑其中几篇。'),
 						h('div', { className: 'dsh-kb-examScope' },
-							h('span', { className: 'dsh-kb-examScopeLabel' }, `范围：${current.kbs.find((kb) => kb.id === kbId)?.name ?? '未选库'}（已选 ${docIds.length} / 共 ${docs.length} 篇）`),
-							h('span', { className: 'dsh-kb-viewerGrow' }),
-							h('button', { type: 'button', className: 'dsh-kb-examScopeBtn', onClick: () => setDocIds(docs.map((doc) => doc.id)) }, '全选'),
-							h('button', { type: 'button', className: 'dsh-kb-examScopeBtn', onClick: () => setDocIds([]) }, '清空')),
-						h('div', { className: 'dsh-kb-examDocs' },
-							docs.length === 0
-								? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先在左边上传。')
-								: docs.map((doc) => h('label', { key: doc.id, className: 'dsh-kb-examDoc' },
-									h('input', {
-										type: 'checkbox',
-										checked: docIds.includes(doc.id),
-										onChange: () => setDocIds((list) => (list.includes(doc.id) ? list.filter((id) => id !== doc.id) : [...list, doc.id])),
-									}),
-									h('span', { className: 'dsh-kb-examDocName' }, doc.name),
-									h('span', { className: 'dsh-kb-examDocMeta' }, `${String(doc.ext || '').replace(/^\./, '')}${doc.chars ? ` · ${doc.chars} 字` : ''}`)))),
-						h('p', { className: 'dsh-kb-hint' }, '勾哪几篇就只考哪几篇；全不勾等于整库。'),
-					h('div', { className: cx('dsh-kb-examModel', diag && !diag.ok && 'dsh-kb-examModel--bad') },
-						diag === null
-							? '正在检查模型…'
-							: diag.ok
-							? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
-							: `用不了模型：${diag.message ?? '原因未知'}（先在会话里选一个模型，或去设置里配 Key）`),
+							h('span', { className: 'dsh-kb-examScopeLabel' }, '知识库'),
+							h('select', {
+								className: 'dsh-kb-select',
+								value: kbId,
+								onChange: (event) => {
+									const nextKb = event.target.value;
+									setKbId(nextKb);
+									setDocIds([]);
+									// 切库时左边文件树跟着切，两边始终是同一个库
+									if (nextKb && nextKb !== current.kbId) loadState(nextKb);
+								},
+							}, current.kbs.map((kb) => h('option', { key: kb.id, value: kb.id }, `${kb.name}（${kb.docs ?? 0} 篇）`)))),
+						h('div', { className: 'dsh-kb-examMode' },
+							h('label', { className: cx('dsh-kb-examModeItem', wholeKb && 'dsh-kb-examModeItem--on') },
+								h('input', { type: 'radio', name: 'dsh-kb-exam-scope', checked: wholeKb, onChange: () => setScopeMode('kb') }),
+								h('span', null, `整个知识库「${kbName}」（${docs.length} 篇）`)),
+							h('label', { className: cx('dsh-kb-examModeItem', !wholeKb && 'dsh-kb-examModeItem--on') },
+								h('input', { type: 'radio', name: 'dsh-kb-exam-scope', checked: !wholeKb, onChange: () => setScopeMode('files') }),
+								h('span', null, wholeKb ? '只挑其中几篇' : `只挑其中几篇（已选 ${docIds.length}）`))),
+						wholeKb
+							? h('p', { className: 'dsh-kb-hint' }, '整库对练：上面这些文档都会用来出题。想只考几篇就切上面第二项。')
+							: h('div', { className: 'dsh-kb-examDocs' },
+								docs.length === 0
+									? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
+									: docs.map((doc) => h('label', { key: doc.id, className: 'dsh-kb-examDoc' },
+										h('input', {
+											type: 'checkbox',
+											checked: docIds.includes(doc.id),
+											onChange: () => setDocIds((list) => (list.includes(doc.id) ? list.filter((id) => id !== doc.id) : [...list, doc.id])),
+										}),
+										h('span', { className: 'dsh-kb-examDocName' }, doc.name),
+										h('span', { className: 'dsh-kb-examDocMeta' }, `${String(doc.ext || '').replace(/^\./, '')}${doc.chars ? ` · ${doc.chars} 字` : ''}`)))),
+						h('div', { className: cx('dsh-kb-examModel', diag && !diag.ok && 'dsh-kb-examModel--bad') },
+							diag === null
+								? '正在检查模型…'
+								: diag.ok
+									? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
+									: `用不了模型：${diag.message ?? '原因未知'}（先在会话里选一个模型，或去设置里配 Key）`),
 						h('div', { className: 'dsh-kb-examActions' },
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-								disabled: Boolean(busy) || !docs.length,
+								disabled: Boolean(busy) || !canStart,
 								onClick: suggest,
 							}, busy || '开始分析'))));
 			}
@@ -2420,6 +2440,9 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examDoc:hover{background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-examDocName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
 				'.dsh-kb-examDocMeta{color:var(--dsw-alias-label-secondary);font-size:11px;white-space:nowrap;}',
+				'.dsh-kb-examMode{display:flex;flex-wrap:wrap;gap:8px;}',
+				'.dsh-kb-examModeItem{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;font-size:12.5px;cursor:pointer;}',
+				'.dsh-kb-examModeItem--on{border-color:var(--dsw-alias-label-brand,#1f6feb);background:var(--dsw-alias-bg-layer-2);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
