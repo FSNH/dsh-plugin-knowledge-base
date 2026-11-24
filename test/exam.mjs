@@ -277,7 +277,8 @@ console.log('\n[7] 刷题模式：出题 prompt + 题库');
 	check('quiz 带 mode 标记', quiz.mode === 'quiz');
 	check('quiz 用点选开始', quiz.prompt.includes('ask_user_question'));
 	check('quiz 说明不要打字回开始', quiz.prompt.includes('不要让我打字'));
-	check('quiz 要求每个选项单独一行', quiz.prompt.includes('每个选项单独一行'));
+	check('quiz 选项用无序列表', quiz.prompt.includes('- **A.**') && quiz.prompt.includes('每个选项一行'));
+	check('quiz 说明 Markdown 会吃掉换行', quiz.prompt.includes('Markdown 会吃掉单个换行'));
 	check('quiz 用弹窗收答案', quiz.prompt.includes('ask_user_question 弹窗'));
 	check('label 带选项摘要', quiz.prompt.includes('选项前 18 字'));
 
