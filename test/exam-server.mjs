@@ -95,7 +95,7 @@ const { routes } = createExamRoutes({
 	origin: () => '',
 	logger: { warn() {} },
 	// 自检用假的：真实现依赖宿主 llm，测试里只验协议
-	diag: async () => ({ ok: true, picked: { provider: 'test', model: 'demo-model' }, models: [], providers: ['test'] }),
+	diag: async () => ({ ready: true, picked: { provider: 'test', model: 'demo-model' }, models: [], providers: ['test'] }),
 });
 const server = http.createServer((req, res) => {
 	const url = new URL(req.url ?? '/', 'http://local');
@@ -202,6 +202,7 @@ try {
 {
 	const diagBody = await (await fetch(`${base}/exam/diag`, { headers: { 'x-kb-client': '1' } })).json();
 	check('diag 返回 ok', diagBody.ok === true, JSON.stringify(diagBody).slice(0, 120));
+	check('diag 里 ready 没被覆盖', diagBody.ready === true, JSON.stringify(diagBody.ready));
 	check('diag 带出选中的模型', diagBody.picked?.model === 'demo-model', JSON.stringify(diagBody.picked));
 }
 

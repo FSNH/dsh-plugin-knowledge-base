@@ -1141,7 +1141,6 @@ window.__ModuleLoader__.load({
 			const [asking, setAsking] = React.useState(0);
 			const [diag, setDiag] = React.useState(null);
 			const [docIds, setDocIds] = React.useState([]);
-			const [scopeMode, setScopeMode] = React.useState('kb');
 			const [docFilter, setDocFilter] = React.useState('');
 			const abortRef = React.useRef(null);
 			const listRef = React.useRef(null);
@@ -1228,12 +1227,13 @@ window.__ModuleLoader__.load({
 
 			async function suggest() {
 				if (!kbId) { setError('先选一个知识库'); return; }
+				const docsAllSelected = (current.nodes || []).filter((node) => node.kind === 'doc').every((node) => docIds.includes(node.id));
 				setError(''); setBusy('正在读这个库…');
 				try {
 					const data = await api('/exam/suggest', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, docIds: scopeMode === 'files' ? docIds : [] }),
+						body: JSON.stringify({ kbId, docIds: docsAllSelected ? [] : docIds }),
 					});
 					setObjectives(data.objectives || []);
 					setPicked(-1);
@@ -1252,7 +1252,7 @@ window.__ModuleLoader__.load({
 					const data = await api('/exam/start', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, objective: text, docIds: scopeMode === 'files' ? docIds : [] }),
+						body: JSON.stringify({ kbId, objective: text, docIds: (current.nodes || []).filter((node) => node.kind === 'doc').every((node) => docIds.includes(node.id)) ? [] : docIds }),
 					});
 					setPlan(data);
 					setStep('outline');
@@ -1336,14 +1336,77 @@ window.__ModuleLoader__.load({
 			if (step === 'setup') {
 				const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
 				const kbName = current.kbs.find((item) => item.id === kbId)?.name ?? '未选库';
-				const wholeKb = scopeMode === 'kb';
 				const picked = docs.filter((doc) => docIds.includes(doc.id));
 				const pickedChars = picked.reduce((sum, doc) => sum + (doc.chars || 0), 0);
 				const totalChars = docs.reduce((sum, doc) => sum + (doc.chars || 0), 0);
-				const canStart = docs.length > 0 && (wholeKb || picked.length > 0);
-				const keyword = String(docFilter || '').trim().toLowerCase();
-				const visible = keyword ? docs.filter((doc) => doc.name.toLowerCase().includes(keyword)) : docs;
+				const allSelected = docs.length > 0 && picked.length === docs.length;
+				const canStart = picked.length > 0;
 				const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
+				const byParent = buildTree(current.nodes || []);
+
+				// 某个文件夹下面（含子文件夹）的所有文档 id
+				const docsUnder = (folderId) => {
+					const out = [];
+					const walk = (parentId) => {
+						for (const node of byParent.get(parentId) || []) {
+							if (node.kind === 'doc') out.push(node.id);
+							else walk(node.id);
+						}
+					};
+					walk(folderId);
+					return out;
+				};
+				const toggleDocs = (ids) => setDocIds((list) => {
+					const allOn = ids.length > 0 && ids.every((id) => list.includes(id));
+					return allOn ? list.filter((id) => !ids.includes(id)) : [...new Set([...list, ...ids])];
+				});
+
+				// 逐层画：勾文件夹 = 勾它下面全部文档
+				const treeRows = [];
+				const drawLevel = (parentId, depth) => {
+					for (const node of byParent.get(parentId) || []) {
+						if (node.kind === 'folder') {
+							const ids = docsUnder(node.id);
+							const on = ids.length > 0 && ids.every((id) => docIds.includes(id));
+							const partial = !on && ids.some((id) => docIds.includes(id));
+							treeRows.push(h('label', {
+								key: node.id,
+								className: cx('dsh-kb-examDoc', 'dsh-kb-examDoc--folder', on && 'dsh-kb-examDoc--on'),
+								style: { paddingLeft: `${8 + depth * 14}px` },
+								title: `${node.name}（${ids.length} 篇）`,
+							},
+								h('input', {
+									type: 'checkbox',
+									checked: on,
+									ref: (el) => { if (el) el.indeterminate = partial; },
+									onChange: () => { if (ids.length) toggleDocs(ids); },
+								}),
+								h(Icon, { name: 'folder', size: 13 }),
+								h('span', { className: 'dsh-kb-examDocName' }, node.name),
+								h('span', { className: 'dsh-kb-examDocMeta' }, `${ids.length} 篇`)));
+							drawLevel(node.id, depth + 1);
+							continue;
+						}
+						const on = docIds.includes(node.id);
+						const ext = String(node.ext || '').replace(/^\./, '').toUpperCase();
+						treeRows.push(h('label', {
+							key: node.id,
+							className: cx('dsh-kb-examDoc', on && 'dsh-kb-examDoc--on'),
+							style: { paddingLeft: `${8 + depth * 14}px` },
+							title: node.name,
+						},
+							h('input', {
+								type: 'checkbox',
+								checked: on,
+								onChange: () => setDocIds((list) => (list.includes(node.id) ? list.filter((id) => id !== node.id) : [...list, node.id])),
+							}),
+							h('span', { className: 'dsh-kb-examDocExt' }, ext || 'FILE'),
+							h('span', { className: 'dsh-kb-examDocName' }, node.name),
+							h('span', { className: 'dsh-kb-examDocMeta' }, node.chars ? size(node.chars) : '—')));
+					}
+				};
+				drawLevel('', 0);
+
 				return h('div', { className: 'dsh-kb-exam' },
 					stepsBar,
 					errorBar,
@@ -1359,82 +1422,38 @@ window.__ModuleLoader__.load({
 									const nextKb = event.target.value;
 									setKbId(nextKb);
 									setDocIds([]);
-									setDocFilter('');
 									if (nextKb && nextKb !== current.kbId) loadState(nextKb);
 								},
 							}, current.kbs.map((item) => h('option', { key: item.id, value: item.id }, item.name)))),
-						h('div', { className: 'dsh-kb-examModes' },
+						h('div', { className: 'dsh-kb-examPickerBar' },
+							h('span', { className: 'dsh-kb-examPickerCount' },
+								`已选 ${picked.length} / ${docs.length} 篇${allSelected ? '（整库）' : ''}`),
+							h('span', { className: 'dsh-kb-viewerGrow' }),
 							h('button', {
-								type: 'button',
-								className: cx('dsh-kb-examModeCard', wholeKb && 'dsh-kb-examModeCard--on'),
-								onClick: () => setScopeMode('kb'),
-							},
-								h(Icon, { name: 'book', size: 15 }),
-								h('span', { className: 'dsh-kb-examModeTitle' }, '整个知识库'),
-								h('span', { className: 'dsh-kb-examModeSub' }, `${docs.length} 篇 · ${size(totalChars)}`)),
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => setDocIds(docs.map((doc) => doc.id)),
+							}, '全选'),
 							h('button', {
-								type: 'button',
-								className: cx('dsh-kb-examModeCard', !wholeKb && 'dsh-kb-examModeCard--on'),
-								onClick: () => setScopeMode('files'),
-							},
-								h(Icon, { name: 'doc', size: 15 }),
-								h('span', { className: 'dsh-kb-examModeTitle' }, '只挑其中几篇'),
-								h('span', { className: 'dsh-kb-examModeSub' }, wholeKb ? '自己勾要考的文档' : `已选 ${picked.length} 篇 · ${size(pickedChars)}`))),
-						wholeKb
-							? h('p', { className: 'dsh-kb-hint dsh-kb-examNote' }, `整个「${kbName}」都会用来出题。`)
-							: h('div', { className: 'dsh-kb-examPicker' },
-								h('div', { className: 'dsh-kb-examPickerBar' },
-									h('span', { className: 'dsh-kb-examPickerCount' }, `已选 ${picked.length} / ${docs.length}`),
-									docs.length > 8
-										? h('input', {
-											className: 'dsh-kb-examFilter',
-											placeholder: '按文件名过滤…',
-											value: docFilter,
-											onChange: (event) => setDocFilter(event.target.value),
-										})
-										: null,
-									h('span', { className: 'dsh-kb-viewerGrow' }),
-									h('button', {
-										type: 'button', className: 'dsh-kb-examMini',
-										onClick: () => setDocIds(visible.map((doc) => doc.id)),
-									}, '全选'),
-									h('button', {
-										type: 'button', className: 'dsh-kb-examMini',
-										onClick: () => setDocIds(docs.filter((doc) => !docIds.includes(doc.id)).map((doc) => doc.id)),
-									}, '反选'),
-									h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
-								h('div', { className: 'dsh-kb-examDocs' },
-									docs.length === 0
-										? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
-										: visible.length === 0
-											? h('p', { className: 'dsh-kb-hint' }, '没有匹配的文件。')
-											: visible.map((doc) => {
-												const on = docIds.includes(doc.id);
-												const ext = String(doc.ext || '').replace(/^\./, '').toUpperCase();
-												return h('label', {
-													key: doc.id,
-													className: cx('dsh-kb-examDoc', on && 'dsh-kb-examDoc--on'),
-													title: doc.name,
-												},
-													h('input', {
-														type: 'checkbox',
-														checked: on,
-														onChange: () => setDocIds((list) => (list.includes(doc.id) ? list.filter((id) => id !== doc.id) : [...list, doc.id])),
-													}),
-													h('span', { className: 'dsh-kb-examDocExt' }, ext || 'FILE'),
-													h('span', { className: 'dsh-kb-examDocName' }, doc.name),
-													h('span', { className: 'dsh-kb-examDocMeta' }, doc.chars ? size(doc.chars) : '—'));
-											}))),
-						h('div', { className: cx('dsh-kb-examModel', diag && !diag.ok && 'dsh-kb-examModel--bad') },
-							h(Icon, { name: diag && !diag.ok ? 'warn' : 'spark', size: 13 }),
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => setDocIds(docs.filter((doc) => !docIds.includes(doc.id)).map((doc) => doc.id)),
+							}, '反选'),
+							h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
+						h('div', { className: 'dsh-kb-examDocs dsh-kb-examDocs--tree' },
+							docs.length === 0
+								? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
+								: treeRows),
+						h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
+							`勾文件或文件夹都可以；全选等于整库对练（${kbName}）。`),
+						h('div', { className: cx('dsh-kb-examModel', diag && diag.ready === false && 'dsh-kb-examModel--bad') },
+							h(Icon, { name: diag && diag.ready === false ? 'warn' : 'spark', size: 13 }),
 							h('span', null, diag === null
 								? '正在检查模型…'
-								: diag.ok
+								: diag.ready !== false
 									? `模型：${diag.picked?.provider ?? ''} · ${diag.picked?.model ?? ''}`
 									: `用不了模型：${diag.message ?? '原因未知'}（先去设置里配一个，或在会话里选一个）`)),
 						h('div', { className: 'dsh-kb-examFoot' },
 							h('span', { className: 'dsh-kb-examFootHint' },
-								wholeKb ? `将用 ${docs.length} 篇 · ${size(totalChars)} 出题` : `将用 ${picked.length} 篇 · ${size(pickedChars)} 出题`),
+								allSelected ? `整库：${docs.length} 篇 · ${size(totalChars)}` : `将用 ${picked.length} 篇 · ${size(pickedChars)} 出题`),
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								disabled: Boolean(busy) || !canStart,
@@ -2489,6 +2508,7 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examScopeBtn{padding:2px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:11.5px;cursor:pointer;}',
 				'.dsh-kb-examScopeBtn:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-examDocs{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow:auto;padding:4px 2px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;}',
+				'.dsh-kb-examDocs--tree{max-height:300px;}',
 				'.dsh-kb-examDoc{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;font-size:12.5px;cursor:pointer;}',
 				'.dsh-kb-examDoc:hover{background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-examDocName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
@@ -2517,6 +2537,8 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examFoot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:9px;border-top:1px solid var(--dsw-alias-border-l1);}',
 				'.dsh-kb-examFootHint{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-examModel{display:flex;align-items:center;gap:6px;}',
+				'.dsh-kb-examDoc--folder{color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examDoc--folder .dsh-kb-examDocName{color:var(--dsw-alias-label-primary);font-weight:500;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
