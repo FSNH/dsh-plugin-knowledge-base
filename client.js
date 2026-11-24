@@ -1339,12 +1339,7 @@ window.__ModuleLoader__.load({
 					const open = detailFor === topic.id;
 					return h('div', { key: topic.id, className: 'dsh-kb-topic' },
 						h('div', { className: 'dsh-kb-topicHead' },
-							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2' }, topic.objective),
-							h('button', {
-								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => removeTopic(topic),
-								title: '删除这个学习主题（不动文档）',
-							}, '删除')),
+							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2' }, topic.objective)),
 						h('div', { className: 'dsh-kb-topicMeta' },
 							`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
 						open
@@ -1368,7 +1363,13 @@ window.__ModuleLoader__.load({
 							h('button', {
 								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && 'dsh-kb-examMini--on'),
 								onClick: () => toggleRuns(topic),
-							}, recordFor?.id === topic.id ? '关闭记录' : '对练记录')));
+							}, recordFor?.id === topic.id ? '关闭记录' : '对练记录'),
+							h('span', { className: 'dsh-kb-viewerGrow' }),
+							h('button', {
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => removeTopic(topic),
+								title: '删除这个学习主题（不动文档）',
+							}, '删除')));
 				};
 
 				const leftColumn = h('div', {
@@ -2451,6 +2452,8 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}',
 				'.dsh-kb-topicDetail{display:flex;flex-direction:column;gap:6px;padding:8px 0 2px;border-top:1px dashed var(--dsw-alias-border-l1);}',
 				'.dsh-kb-topicDetail .dsh-kb-hint{margin:0;}',
+				'.dsh-kb-topic{display:flex;flex-direction:column;min-height:132px;box-sizing:border-box;}',
+				'.dsh-kb-topicFoot{margin-top:auto;padding-top:8px;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
