@@ -1,15 +1,32 @@
 # DSH 个人知识库插件
 
-[![npm](https://img.shields.io/npm/v/@xiaofanzhao/dsh-plugin-knowledge-base)](https://www.npmjs.com/package/@xiaofanzhao/dsh-plugin-knowledge-base)
+[![npm](https://img.shields.io/npm/v/@xiaofanzhao/dsh-plugin-knowledge-base?color=2563eb)](https://www.npmjs.com/package/@xiaofanzhao/dsh-plugin-knowledge-base)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A524-339933)](https://nodejs.org/)
 
-把本地文件整理成树状知识库，在 DeepSeek Harness 里直接读、直接搜，AI 也能检索并针对某一篇文档对话。
+把散落在本机的 PPT、Word、Excel、PDF、图片整理成**树状知识库**：点开就是原始版式，搜中文两字词也能命中，AI 能检索、带着出处回答，还能基于它出题陪练。
 
-数据全在本机（默认 `~/.dsh/kb`），不经过任何云端。
+- 📂 **原版式查看** —— Office / PDF 转页渲染，缩略图漫游、页码跳转、大屏放映
+- 🔍 **中文全文检索** —— SQLite FTS5 + CJK 归一化，短词也能中；可选向量检索
+- 🤖 **AI 会用你的资料** —— 三个只读工具，任何会话里都能检索、读正文、标出处
+- 🎯 **学与练** —— 建学习主题后「AI 对练」或「刷题」，记录、评分、检验报告都能回看
+- 🔒 **纯本地** —— 文件与索引都在 `~/.dsh/kb`，不上传云端
 
-![界面示意图](docs/images/ui-overview.svg)
+![界面示例](docs/images/ui-overview.svg)
 
-<sub>界面示意图（跟随 DSH 主题与窗口宽度变化）</sub>
+<sub>示例界面：文件名为占位示例；真实界面跟随 DSH 主题与窗口宽度。</sub>
+
+## 目录
+
+- [它解决什么问题](#它解决什么问题)
+- [三分钟上手](#三分钟上手)
+- [功能](#功能)
+- [安装](#安装) · [升级与备份](#升级与备份)
+- [使用](#使用) · [学与练：AI 对练 / 刷题](#学与练ai-对练--刷题)
+- [AI 工具](#ai-工具) · [配置](#配置)
+- [数据与隐私](#数据与隐私) · [支持的格式](#支持的格式)
+- [常见问题](#常见问题) · [已知限制](#已知限制)
+- [版本历史](#版本历史) · [打包与发布](#打包与发布) · [开发与测试](#开发与测试)
 
 ## 它解决什么问题
 
@@ -24,7 +41,7 @@
 
 ```powershell
 # 1. 装（桌面端把 web 换成 desktop）
-dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
 ```
 
 ```
@@ -54,7 +71,7 @@ dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 ### 方式一：从 npm 装（推荐）
 
 ```powershell
-dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
 ```
 
 已发布在 npm：[`@xiaofanzhao/dsh-plugin-knowledge-base`](https://www.npmjs.com/package/@xiaofanzhao/dsh-plugin-knowledge-base)
@@ -62,7 +79,7 @@ dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 一条命令就够：它会把包装进 profile、把包名写进 `dsh.profile.bundles`，profile 启动时再合并包内自带的 `cordis.patch.yml`。**不需要手改任何 profile 文件**。
 
 - 装哪个 profile 就把 `web` 换成你的（桌面端是 `desktop`）
-- 升级：把版本号换成新的（`@0.1.1`）再执行一次
+- 升级：把版本号换成新的（如 `@0.4.1`）再执行一次，详见 [升级与备份](#升级与备份)
 - 卸载：`dsh plugin --profile web remove @xiaofanzhao/dsh-plugin-knowledge-base`
 
 > 如果提示 `E404 / 找不到这个版本`，说明该版本还没发布到 npm，先用方式二。
@@ -89,6 +106,30 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 > Office 原版式预览依赖 DSH 自带的 LibreOffice（`officeKit`）：没有它也能用，只是 Office 文档只能看抽取出来的文字。
 > **包名 ≠ 仓库名**：npm 上的 `dsh-plugin-knowledge-base` 已被别人的包占用，所以包名带 `@xiaofanzhao/` 作用域；仓库名保持不变。
 
+## 升级与备份
+
+升级只换代码，**不会动数据**：数据库、正文、分块索引、物理文件都在 `~/.dsh/kb`（可用配置里的 `root` 改），与插件包目录完全分开。建表用 `CREATE TABLE IF NOT EXISTS`，新列走 `ALTER TABLE`，没有删表步骤。
+
+```powershell
+# 1. 先备份（整个目录，含 -wal）
+Copy-Item "$env:USERPROFILE\.dsh\kb" "$env:USERPROFILE\.dsh\kb-backup-$(Get-Date -Format yyyyMMdd-HHmmss)" -Recurse
+
+# 2. 升级到指定版本
+dsh plugin --profile desktop add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
+```
+
+两个容易踩的点：
+
+1. **开发模式要先解除链接**。用 `add <本地目录>` 装过的话，`node_modules` 里是指向源码目录的链接；直接按版本号升级会在替换目录时失败，甚至波及源码仓库。先删链接再升级：
+
+   ```powershell
+   cmd /c rmdir "C:\Users\<你>\.dsh\profiles\desktop\node_modules\@xiaofanzhao\dsh-plugin-knowledge-base"
+   ```
+
+2. **进程被强杀时 WAL 还没合并**。0.4.1 起关闭库前会 `wal_checkpoint(TRUNCATE)`；更早的版本请把 `kb.db-wal` 一起备份，或让 DSH 正常退出后再拷。
+
+升级后核对一眼：文档数、学习主题数、题库题目数是否与升级前一致。
+
 ## 版本历史
 
 每个版本改了什么见 [CHANGELOG.md](./CHANGELOG.md)。
@@ -100,8 +141,8 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 ### 1. 本地打包自测（不需要发布）
 
 ```powershell
-npm pack                     # 产出 xiaofanzhao-dsh-plugin-knowledge-base-0.1.0.tgz（25 个文件，约 95 KB）
-dsh plugin --profile kbtest add .\xiaofanzhao-dsh-plugin-knowledge-base-0.1.0.tgz
+npm pack                     # 产出 xiaofanzhao-dsh-plugin-knowledge-base-0.4.1.tgz（29 个文件，约 132 KB）
+dsh plugin --profile kbtest add .\xiaofanzhao-dsh-plugin-knowledge-base-0.4.1.tgz
 ```
 
 装完打开 `~/.dsh/profiles/kbtest/package.json`，应该能看到包名被自动追加进 bundles：
@@ -123,7 +164,7 @@ npm publish --access public      # 作用域包（@xxx/yyy）必须带 --access 
 发布后任何人：
 
 ```powershell
-dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
 ```
 
 ### 3. 自动发布（可选）
@@ -131,11 +172,13 @@ dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.1.0
 仓库里带了 [`.github/workflows/publish.yml`](.github/workflows/publish.yml)：在 GitHub 的仓库设置里加一个 `NPM_TOKEN` secret（npm 的 Automation token），然后
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.4.1
+git push origin v0.4.1
 ```
 
 就会自动校验「tag 与 package.json 版本一致」→ `npm publish --provenance`。
+
+> 发布前把 `package.json` 的 `version` 与 `CHANGELOG.md` 的版本段一起改好：CI 会核对 tag 与版本号，不一致直接失败。
 
 ### 发布前检查清单
 
@@ -353,6 +396,22 @@ $env:KB_TEST_XLSX = "C:\path\to\any.xlsx"
 ```
 
 > 用 DSH 自带的 Electron 可执行文件跑，是因为 `node:sqlite` 需要 Node 24（DSH 内置），系统 Node 可能没有。
+
+## 常见问题
+
+**装完左栏没有「知识库」图标？** 先刷新页面；还不行就在插件页确认它是启用状态。
+
+**Office 文档只能看文字，没有原版式？** 原版式依赖 DSH 自带的 LibreOffice（`officeKit`）。没有它插件会自动降级成文字阅读，其余功能不受影响。
+
+**中文搜不到？** 检索对中文做了逐字归一化，两字词就能命中；若整篇都没解析成功，文件列表里会标出失败原因。
+
+**升级后接口全 404、面板显示"还没有知识库"？** 通常是宿主没重启（服务端代码没换），或旧库残留同名表导致建表失败——0.4.1 起建表逐条容错，重启 DSH 即可。
+
+**问答里引用不到内容？** 确认文档状态是"已索引"：AI 检索只读已解析完成的正文。
+
+**数据会被上传吗？** 不会。库文件、索引、检索记录都在本机；只有你主动提问时，命中的片段才进入会话上下文。
+
+**为什么包名带 `@xiaofanzhao/`？** npm 上不带作用域的 `dsh-plugin-knowledge-base` 已被他人占用；仓库名保持不变。
 
 ## 已知限制
 
