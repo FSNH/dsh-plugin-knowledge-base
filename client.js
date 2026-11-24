@@ -1171,7 +1171,7 @@ window.__ModuleLoader__.load({
 			const [error, setError] = React.useState('');
 			const [notice, setNotice] = React.useState('');
 			// 对练记录：runsFor = 展开的是哪个主题；openedRun = 正在看的那一次
-			const [runsFor, setRunsFor] = React.useState('');
+			const [recordFor, setRecordFor] = React.useState(null);
 			const [runs, setRuns] = React.useState([]);
 			const [openedRun, setOpenedRun] = React.useState(null);
 
@@ -1231,8 +1231,8 @@ window.__ModuleLoader__.load({
 			}
 
 			async function toggleRuns(topic) {
-				if (runsFor === topic.id) { setRunsFor(''); setRuns([]); setOpenedRun(null); return; }
-				setRunsFor(topic.id); setRuns([]); setOpenedRun(null);
+				if (recordFor?.id === topic.id) { setRecordFor(null); setRuns([]); setOpenedRun(null); return; }
+				setRecordFor(topic); setRuns([]); setOpenedRun(null);
 				try {
 					const data = await api(`/exam/runs?topicId=${encodeURIComponent(topic.id)}`);
 					setRuns(data.runs || []);
@@ -1317,22 +1317,33 @@ window.__ModuleLoader__.load({
 								item.comment ? h('span', null, item.comment) : null))));
 				};
 
-				const runList = (topic) => {
-					if (runsFor !== topic.id) return null;
-					return h('div', { className: 'dsh-kb-runList' },
-						runs.length === 0
-							? h('p', { className: 'dsh-kb-hint' }, '还没有对练记录。开一场对练，AI 会把每道题都记下来。')
-							: runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
-								h('button', {
-									type: 'button',
-									className: cx('dsh-kb-runHead', openedRun?.id === run.id && 'dsh-kb-runHead--on'),
-									onClick: () => openRun(run),
-								},
-									h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
-									h('span', { className: 'dsh-kb-runMeta' },
-										`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}`)),
-								runDetail(run))));
-				};
+			// 对练记录：右侧侧栏（不在卡片下面展开）
+			const sidePanel = !recordFor ? null : h('div', { className: 'dsh-kb-examSide' },
+				h('div', { className: 'dsh-kb-examSideHead' },
+					h('div', { className: 'dsh-kb-examTitle' }, '对练记录'),
+					h('span', { className: 'dsh-kb-examScopeLabel' }, `${runs.length} 次`),
+					h('span', { className: 'dsh-kb-viewerGrow' }),
+					h('button', {
+						type: 'button', className: 'dsh-kb-examMini',
+						onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); },
+						title: '关闭',
+					}, h(Icon, { name: 'close', size: 12 }))),
+				h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
+				runs.length === 0
+					? h('p', { className: 'dsh-kb-hint' }, '还没有对练记录。开一场对练，AI 会把每道题都记下来。')
+					: h('div', { className: 'dsh-kb-runList' },
+						runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
+							h('button', {
+								type: 'button',
+								className: cx('dsh-kb-runHead', openedRun?.id === run.id && 'dsh-kb-runHead--on'),
+								onClick: () => openRun(run),
+							},
+								h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
+								h('span', { className: 'dsh-kb-runMeta' },
+									`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}`)),
+							runDetail(run)))));
+
+
 
 				const card = (topic) => h('div', { key: topic.id, className: 'dsh-kb-topic' },
 					h('div', { className: 'dsh-kb-topicHead' },
@@ -1356,11 +1367,11 @@ window.__ModuleLoader__.load({
 						h('button', {
 							type: 'button', className: 'dsh-kb-examMini',
 							onClick: () => toggleRuns(topic),
-						}, runsFor === topic.id ? '收起记录' : '对练记录'),
+						}, recordFor?.id === topic.id ? '关闭记录' : '对练记录'),
 						h('span', { className: 'dsh-kb-hint' }, '会打开会话，把考官 prompt 预填进去')),
-					runList(topic));
+					);
 
-				return h('div', { className: 'dsh-kb-exam' },
+				return h('div', { className: 'dsh-kb-exam dsh-kb-exam--withSide' },
 					h('div', { className: 'dsh-kb-examHead' },
 						h('div', { className: 'dsh-kb-examTitle' }, '学习主题'),
 						h('span', { className: 'dsh-kb-examScopeLabel' }, topics === null ? '加载中…' : `${list.length} 个`),
@@ -1382,7 +1393,7 @@ window.__ModuleLoader__.load({
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								onClick: () => { setView('scope'); setError(''); setNotice(''); },
 							}, '新建学习主题'))
-						: h('div', { className: 'dsh-kb-topicList' }, list.map(card)));
+						: h('div', { className: 'dsh-kb-topicList' }, list.map(card)), sidePanel);
 			}
 
 			// ② 选范围 → 交给会话
@@ -2385,6 +2396,11 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-runA{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.6;}',
 				'.dsh-kb-runG{display:flex;gap:8px;font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-runScore{flex:none;font-weight:600;color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-exam--withSide{position:relative;padding-right:388px;}',
+				'.dsh-kb-examSide{position:absolute;top:16px;right:16px;bottom:16px;width:356px;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:auto;}',
+				'.dsh-kb-examSideHead{display:flex;align-items:center;gap:8px;}',
+				'.dsh-kb-examSideTopic{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.5;margin:0;}',
+				'.dsh-kb-examMini--on{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-brand,#1f6feb);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
