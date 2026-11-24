@@ -1176,6 +1176,7 @@ window.__ModuleLoader__.load({
 			const [openItems, setOpenItems] = React.useState([]);
 			const [recordFor, setRecordFor] = React.useState(null);
 			const [sideWidth, setSideWidth] = React.useState(430);
+			const [sideFull, setSideFull] = React.useState(false);
 			const [detailFor, setDetailFor] = React.useState('');
 			// 标题悬浮提示（原生 title 太慢、样式不跟主题，自己做一个）
 			const [tip, setTip] = React.useState(null);
@@ -1250,7 +1251,7 @@ window.__ModuleLoader__.load({
 
 			async function toggleRuns(topic) {
 				if (recordFor?.id === topic.id) { setRecordFor(null); setRuns([]); setOpenedRun(null); return; }
-				setRecordFor(topic); setRuns([]); setOpenedRun(null);
+				setRecordFor(topic); setRuns([]); setOpenedRun(null); setSideFull(false);
 				try {
 					const data = await api(`/exam/runs?topicId=${encodeURIComponent(topic.id)}`);
 					setRuns(data.runs || []);
@@ -1413,7 +1414,7 @@ window.__ModuleLoader__.load({
 
 				const leftColumn = h('div', {
 					className: 'dsh-kb-examCol',
-					style: { flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px', overflow: 'auto' },
+					style: { flex: '1 1 auto', minWidth: 0, display: sideFull ? 'none' : 'flex', flexDirection: 'column', gap: '12px', overflow: 'auto' },
 				},
 					h('div', { className: 'dsh-kb-examHead' },
 						h('div', { className: 'dsh-kb-examTitle' }, '学习主题'),
@@ -1445,9 +1446,11 @@ window.__ModuleLoader__.load({
 				// 右列只在点了「对练记录」之后才存在，默认不占位、不空着
 				const rightColumn = !recordFor ? null : h('div', {
 					className: 'dsh-kb-examSide',
-					style: { flex: '0 0 auto', width: `min(${sideWidth}px, 46vw)`, display: 'flex', flexDirection: 'column', padding: '12px 14px', borderLeft: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' },
+					style: sideFull
+						? { flex: '1 1 100%', width: '100%', display: 'flex', flexDirection: 'column', padding: '12px 14px', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' }
+						: { flex: '0 0 auto', width: `min(${sideWidth}px, 46vw)`, display: 'flex', flexDirection: 'column', padding: '12px 14px', borderLeft: '1px solid var(--dsw-alias-border-l1)', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' },
 				},
-					h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
+					sideFull ? null : h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
 					h('div', { className: 'dsh-kb-examSideInner', style: { display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 } },
 						h('div', { className: 'dsh-kb-examSideHead' },
 							h('div', { className: 'dsh-kb-examTitle' }, '对练记录'),
@@ -1455,7 +1458,12 @@ window.__ModuleLoader__.load({
 							h('span', { className: 'dsh-kb-viewerGrow' }),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); },
+								onClick: () => setSideFull((value) => !value),
+								title: sideFull ? '退出全屏' : '全屏查看',
+							}, sideFull ? '退出全屏' : '全屏'),
+							h('button', {
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); setSideFull(false); },
 								title: '关闭',
 							}, h(Icon, { name: 'close', size: 12 }))),
 						h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
