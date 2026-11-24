@@ -129,6 +129,14 @@ console.log('\n[3] 考官 prompt');
 	check('限制一次一题', prompt.includes('一次只问一道题'));
 	check('要求给结论', prompt.includes('达成'));
 	check('要出处', prompt.includes('kb_search'));
+	check('有题目质量标准', prompt.includes('题目质量标准'));
+	check('禁止指代原文', prompt.includes('脱离原文也能独立读懂') && prompt.includes('那行小字'));
+	check('禁止"文档里写了什么"', prompt.includes('禁止问'));
+	check('给了四类题型', ['场景判断', '因果解释', '对比辨析', '反例纠错'].every((t) => prompt.includes(t)));
+	check('记忆题占比上限', prompt.includes('不超过两成'));
+	check('出题前自检', prompt.includes('能区分会与不会'));
+	check('要求每题记录', prompt.includes('kb_exam_log'));
+	check('记录行真的带 topicId', prompt.includes('topicId=tp_'), prompt.slice(prompt.indexOf('记录：'), prompt.indexOf('记录：') + 60));
 }
 
 console.log('\n[4] agent 工具');
