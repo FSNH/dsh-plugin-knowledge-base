@@ -1361,9 +1361,11 @@ window.__ModuleLoader__.load({
 						title: '关闭',
 					}, h(Icon, { name: 'close', size: 12 }))),
 				sideCollapsed ? null : h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
-				h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
 				sideCollapsed ? null : runs.length === 0
-					? h('p', { className: 'dsh-kb-hint' }, '还没有对练记录。开一场对练，AI 会把每道题都记下来。')
+					? h('div', { className: 'dsh-kb-runEmpty' },
+						h('p', { className: 'dsh-kb-hint' }, '这个主题还没有对练记录。'),
+						h('p', { className: 'dsh-kb-hint' }, '点「开始 AI 对练」，每答完一题 AI 会调用 kb_exam_log 记下来；'),
+						h('p', { className: 'dsh-kb-hint' }, '如果刚练过却没有记录，多半是会话里没调那个工具。'))
 					: h('div', { className: 'dsh-kb-runList' },
 						runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
 							h('button', {
@@ -2442,6 +2444,8 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examSide--collapsed{width:46px;padding:8px 6px;align-items:center;}',
 				'.dsh-kb-examSideRail{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 2px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;cursor:pointer;writing-mode:vertical-rl;}',
 				'.dsh-kb-examSideRail:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-runEmpty{display:flex;flex-direction:column;gap:4px;}',
+				'.dsh-kb-runEmpty .dsh-kb-hint{margin:0;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();

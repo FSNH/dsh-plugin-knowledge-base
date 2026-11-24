@@ -246,6 +246,12 @@ console.log('\n[6] kb_exam_log 工具');
 	});
 	check('turn 记录成功', turn.ok === true && turn.seq === 1, JSON.stringify(turn));
 
+	// 忘了 start 时，turn 带 topicId 也要能落库
+	const lazy = await log.execute({ action: 'turn', topicId: topic.id, question: '没 start 的题？', answer: '答', score: 50 });
+	check('turn 只给 topicId 也能记', lazy.ok === true && lazy.runId.startsWith('rn_'), JSON.stringify(lazy));
+	const lazyRun = exam.getRun(lazy.runId);
+	check('自动开的那场也有这题', lazyRun.items.length === 1 && lazyRun.items[0].question.includes('没 start'), JSON.stringify(lazyRun.items.length));
+
 	const done = await log.execute({ action: 'finish', runId: started.runId, verdict: 'near', summary: '还行' });
 	check('finish 记录成功', done.ok === true && done.seq === 1, JSON.stringify(done));
 
