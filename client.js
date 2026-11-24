@@ -1176,6 +1176,21 @@ window.__ModuleLoader__.load({
 			const [recordFor, setRecordFor] = React.useState(null);
 			const [sideWidth, setSideWidth] = React.useState(356);
 			const [detailFor, setDetailFor] = React.useState('');
+			// 标题悬浮提示（原生 title 太慢、样式不跟主题，自己做一个）
+			const [tip, setTip] = React.useState(null);
+			const tipTimer = React.useRef(null);
+			const showTip = (event, text) => {
+				const rect = event.currentTarget.getBoundingClientRect();
+				if (tipTimer.current) clearTimeout(tipTimer.current);
+				tipTimer.current = setTimeout(() => {
+					const above = rect.bottom + 120 > window.innerHeight;
+					setTip({ text, left: rect.left, top: above ? rect.top - 8 : rect.bottom + 8, above });
+				}, 200);
+			};
+			const hideTip = () => {
+				if (tipTimer.current) clearTimeout(tipTimer.current);
+				setTip(null);
+			};
 
 			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
 			const setDocIds = (next) => patch({ examPicked: typeof next === 'function' ? next(docIds) : next });
@@ -1339,7 +1354,11 @@ window.__ModuleLoader__.load({
 					const open = detailFor === topic.id;
 					return h('div', { key: topic.id, className: 'dsh-kb-topic' },
 						h('div', { className: 'dsh-kb-topicHead' },
-							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2', title: topic.objective }, topic.objective)),
+							h('div', {
+							className: 'dsh-kb-topicTitle dsh-kb-clamp2',
+							onMouseEnter: (event) => showTip(event, topic.objective),
+							onMouseLeave: hideTip,
+						}, topic.objective)),
 						h('div', { className: 'dsh-kb-topicMeta' },
 							`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
 						open
@@ -1436,11 +1455,15 @@ window.__ModuleLoader__.load({
 										h('span', { className: 'dsh-kb-runMeta' },
 											`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}`)),
 									runDetail(run))))));
+				const tipLayer = !tip ? null : h('div', {
+					className: 'dsh-kb-tip',
+					style: { left: tip.left + 'px', top: tip.top + 'px', transform: tip.above ? 'translateY(-100%)' : 'none' },
+				}, tip.text);
 
 				return h('div', {
 					className: 'dsh-kb-exam dsh-kb-exam--split',
 					style: { display: 'flex', flexDirection: 'row', alignItems: 'stretch', gap: '14px', overflow: 'hidden' },
-				}, leftColumn, rightColumn);
+				}, leftColumn, rightColumn, tipLayer);
 			}
 
 
@@ -2457,6 +2480,7 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-topicDetail .dsh-kb-hint{margin:0;}',
 				'.dsh-kb-topic{display:flex;flex-direction:column;min-height:132px;box-sizing:border-box;}',
 				'.dsh-kb-topicFoot{margin-top:auto;padding-top:8px;}',
+				'.dsh-kb-tip{position:fixed;z-index:80;max-width:440px;padding:8px 11px;border-radius:9px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font-size:12.5px;line-height:1.65;box-shadow:0 8px 28px rgba(0,0,0,.28);pointer-events:none;white-space:normal;word-break:break-word;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
