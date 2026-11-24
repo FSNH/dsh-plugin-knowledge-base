@@ -1345,8 +1345,21 @@ window.__ModuleLoader__.load({
 					return 'dsh-kb-runScore--bad';
 				};
 				const runDetail = (run) => {
-					if (openedRun?.id !== run.id || !openedRun.items?.length) return null;
-					return h('div', { className: 'dsh-kb-runBody' },
+					if (openedRun?.id !== run.id || (!openedRun.items?.length && !openedRun.summary)) return null;
+					const verdictLabel = openedRun.verdict === 'pass' ? '达成'
+						: openedRun.verdict === 'near' ? '接近' : openedRun.verdict === 'fail' ? '未达成' : '';
+					const reportBlock = !openedRun.summary ? null : h('div', { className: 'dsh-kb-runReport' },
+						h('div', { className: 'dsh-kb-runReportHead' },
+							h('span', { className: 'dsh-kb-runReportTitle' }, '检验报告'),
+							verdictLabel
+								? h('span', {
+									className: cx('dsh-kb-runScore',
+										openedRun.verdict === 'pass' ? 'dsh-kb-runScore--good'
+											: openedRun.verdict === 'near' ? 'dsh-kb-runScore--mid' : 'dsh-kb-runScore--bad'),
+								}, verdictLabel)
+								: null),
+						h('div', { className: 'dsh-kb-runReportBody' }, openedRun.summary));
+					return h('div', { className: 'dsh-kb-runBody' }, reportBlock,
 						openedRun.items.map((item) => {
 							const open = openItems.includes(item.id);
 							const hasMore = Boolean(item.answer || item.comment);
@@ -1481,7 +1494,7 @@ window.__ModuleLoader__.load({
 									},
 										h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
 										h('span', { className: 'dsh-kb-runMeta' },
-											`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}`)),
+											`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}${run.summary ? ' · 有报告' : ''}`)),
 									runDetail(run))))));
 				const tipLayer = !tip ? null : h('div', {
 					className: 'dsh-kb-tip',
@@ -2516,6 +2529,10 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-runQ{font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;}',
 				'.dsh-kb-runA{font-size:12px;line-height:1.7;color:var(--dsw-alias-label-secondary);padding:8px 10px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);white-space:pre-wrap;word-break:break-word;}',
 				'.dsh-kb-runC{font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-word;}',
+				'.dsh-kb-runReport{display:flex;flex-direction:column;gap:6px;padding:10px 12px;margin:2px 0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-runReportHead{display:flex;align-items:center;gap:8px;}',
+				'.dsh-kb-runReportTitle{font-size:12.5px;font-weight:600;}',
+				'.dsh-kb-runReportBody{font-size:12px;line-height:1.75;white-space:pre-wrap;word-break:break-word;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
