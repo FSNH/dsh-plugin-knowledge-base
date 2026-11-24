@@ -322,6 +322,25 @@ console.log('\n[7] 刷题模式：出题 prompt + 题库');
 	check('答案不在选项里会被拒', badAnswer);
 	const noOptions = (() => { try { exam.saveQuizItem({ topicId: topic.id, stem: 'y', options: [{ key: 'A', text: 'a' }], answer: ['A'] }); return false; } catch { return true; } })();
 	check('选项少于一题两选会被拒', noOptions);
+
+	// 入参容错：字符串数组 / "A,C" / "AC"
+	const tolerant = exam.saveQuizItem({
+		topicId: topic.id,
+		stem: '容错用例：字符串数组的选项',
+		options: ['A. 甲选项', 'B. 乙选项', 'C. 丙选项'],
+		answer: 'A,C',
+	});
+	const saved = exam.listQuizItems(topic.id).find((item) => item.id === tolerant.id);
+	check('字符串数组选项能解析', saved.options.length === 3 && saved.options[0].key === 'A', JSON.stringify(saved.options));
+	check('"A,C" 形式答案能解析', saved.answer.join(',') === 'A,C', JSON.stringify(saved.answer));
+
+	const packed = exam.saveQuizItem({
+		topicId: topic.id,
+		stem: '容错用例：AC 连写',
+		options: { A: '甲', B: '乙', C: '丙' },
+		answer: 'ac',
+	});
+	check('对象映射选项 + 连写答案', exam.listQuizItems(topic.id).find((item) => item.id === packed.id)?.answer.join(',') === 'A,C');
 }
 
 console.log('\n[8] kb_quiz_save 工具');
