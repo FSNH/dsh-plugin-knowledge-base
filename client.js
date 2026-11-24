@@ -1172,6 +1172,8 @@ window.__ModuleLoader__.load({
 			const [notice, setNotice] = React.useState('');
 			// 对练记录：runsFor = 展开的是哪个主题；openedRun = 正在看的那一次
 			const [recordFor, setRecordFor] = React.useState(null);
+	const [sideWidth, setSideWidth] = React.useState(356);
+	const [sideCollapsed, setSideCollapsed] = React.useState(false);
 			const [runs, setRuns] = React.useState([]);
 			const [openedRun, setOpenedRun] = React.useState(null);
 
@@ -1239,6 +1241,21 @@ window.__ModuleLoader__.load({
 				} catch (err) {
 					setError(friendly(err));
 				}
+			}
+
+			// 拖左边缘调宽：侧栏贴在右边，所以宽度 = 视口右边到指针的距离
+			function startResize(event) {
+				event.preventDefault();
+				const onMove = (moveEvent) => {
+					const next = Math.max(260, Math.min(640, window.innerWidth - moveEvent.clientX - 16));
+					setSideWidth(next);
+				};
+				const onUp = () => {
+					window.removeEventListener('mousemove', onMove);
+					window.removeEventListener('mouseup', onUp);
+				};
+				window.addEventListener('mousemove', onMove);
+				window.addEventListener('mouseup', onUp);
 			}
 
 			async function openRun(run) {
@@ -1318,18 +1335,34 @@ window.__ModuleLoader__.load({
 				};
 
 			// 对练记录：右侧侧栏（不在卡片下面展开）
-			const sidePanel = !recordFor ? null : h('div', { className: 'dsh-kb-examSide' },
-				h('div', { className: 'dsh-kb-examSideHead' },
+			const sidePanel = !recordFor ? null : h('div', {
+				className: cx('dsh-kb-examSide', sideCollapsed && 'dsh-kb-examSide--collapsed'),
+				style: sideCollapsed ? undefined : { width: `${sideWidth}px` },
+			},
+				sideCollapsed
+					? h('button', {
+						type: 'button', className: 'dsh-kb-examSideRail',
+						onClick: () => setSideCollapsed(false),
+						title: '展开对练记录',
+					}, h(Icon, { name: 'chevron', size: 13, className: 'dsh-kb-rot180' }), h('span', null, `${runs.length} 次`))
+					: h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
+				sideCollapsed ? null : h('div', { className: 'dsh-kb-examSideHead' },
 					h('div', { className: 'dsh-kb-examTitle' }, '对练记录'),
 					h('span', { className: 'dsh-kb-examScopeLabel' }, `${runs.length} 次`),
 					h('span', { className: 'dsh-kb-viewerGrow' }),
 					h('button', {
 						type: 'button', className: 'dsh-kb-examMini',
-						onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); },
+						onClick: () => setSideCollapsed(true),
+						title: '收起',
+					}, '收起'),
+					h('button', {
+						type: 'button', className: 'dsh-kb-examMini',
+						onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); setSideCollapsed(false); },
 						title: '关闭',
 					}, h(Icon, { name: 'close', size: 12 }))),
+				sideCollapsed ? null : h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
 				h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
-				runs.length === 0
+				sideCollapsed ? null : runs.length === 0
 					? h('p', { className: 'dsh-kb-hint' }, '还没有对练记录。开一场对练，AI 会把每道题都记下来。')
 					: h('div', { className: 'dsh-kb-runList' },
 						runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
@@ -1371,7 +1404,10 @@ window.__ModuleLoader__.load({
 						h('span', { className: 'dsh-kb-hint' }, '会打开会话，把考官 prompt 预填进去')),
 					);
 
-				return h('div', { className: 'dsh-kb-exam dsh-kb-exam--withSide' },
+				return h('div', {
+					className: 'dsh-kb-exam dsh-kb-exam--withSide',
+					style: { paddingRight: recordFor ? (sideCollapsed ? 62 : sideWidth + 34) + 'px' : undefined },
+				},
 					h('div', { className: 'dsh-kb-examHead' },
 						h('div', { className: 'dsh-kb-examTitle' }, '学习主题'),
 						h('span', { className: 'dsh-kb-examScopeLabel' }, topics === null ? '加载中…' : `${list.length} 个`),
@@ -2401,6 +2437,11 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examSideHead{display:flex;align-items:center;gap:8px;}',
 				'.dsh-kb-examSideTopic{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.5;margin:0;}',
 				'.dsh-kb-examMini--on{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-examSideHandle{position:absolute;left:-5px;top:0;bottom:0;width:10px;cursor:col-resize;}',
+				'.dsh-kb-examSideHandle:hover{background:linear-gradient(90deg,transparent,rgba(127,127,127,.25));}',
+				'.dsh-kb-examSide--collapsed{width:46px;padding:8px 6px;align-items:center;}',
+				'.dsh-kb-examSideRail{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 2px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;cursor:pointer;writing-mode:vertical-rl;}',
+				'.dsh-kb-examSideRail:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-primary);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
