@@ -53,6 +53,36 @@ addDoc({
 
 const exam = createExam({ store, logger: { warn() {}, error() {} } });
 
+console.log('\n[0] 老库兼容：残留旧版 exam_turn 也要能起来');
+{
+	// 模拟被上一版用过的库：exam_turn 是旧结构（session_id / kp_id / kind …）
+	const dirtyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-topic-dirty-'));
+	const dirty = openStore({ root: dirtyRoot, logger: { info() {}, warn() {}, error() {} } });
+	dirty.db.exec('CREATE TABLE exam_turn (id TEXT PRIMARY KEY, session_id TEXT, seq INTEGER, kp_id TEXT, kind TEXT, payload TEXT)');
+	dirty.createKb({ id: 'kb_dirty', name: '脏库', now });
+	const warnings = [];
+	let dirtyExam = null;
+	let threw = null;
+	try {
+		dirtyExam = createExam({ store: dirty, logger: { warn: (msg) => warnings.push(String(msg)), error() {} } });
+	} catch (error) {
+		threw = error;
+	}
+	check('旧表残留时仍能建引擎', threw === null, threw?.message);
+	const topic = dirtyExam.saveTopic({
+		kbId: 'kb_dirty', docIds: [], objective: '脏库里的主题',
+		outline: [{ id: 'kp1', title: '甲' }], blueprint: [], totalTurns: 4,
+	});
+	const { runId } = dirtyExam.startRun({ topicId: topic.id });
+	dirtyExam.logTurn({ runId, question: '题', answer: '答', score: 80, verdict: 'full' });
+	check('记录写进新表 exam_qa', dirtyExam.getRun(runId).items.length === 1);
+	check('旧表没被动过', (() => {
+		try { dirty.db.prepare('SELECT COUNT(*) AS n FROM exam_turn').get(); return true; } catch { return false; }
+	})());
+	dirty.close();
+	fs.rmSync(dirtyRoot, { recursive: true, force: true });
+}
+
 console.log('\n[1] 设计 prompt（会话里用）');
 {
 	const design = exam.designPrompt({ kbId, docIds: ['d_a'] });
