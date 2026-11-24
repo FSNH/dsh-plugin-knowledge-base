@@ -1140,12 +1140,18 @@ window.__ModuleLoader__.load({
 			const [board, setBoard] = React.useState([]);
 			const [asking, setAsking] = React.useState(0);
 			const [diag, setDiag] = React.useState(null);
+			const [docIds, setDocIds] = React.useState([]);
 			const abortRef = React.useRef(null);
 			const listRef = React.useRef(null);
 			const inputRef = React.useRef(null);
 
 			React.useEffect(() => () => { try { abortRef.current?.abort(); } catch { /* ignore */ } }, []);
 			React.useEffect(() => { if (current.kbId && !kbId) setKbId(current.kbId); }, [current.kbId]);
+			// 范围跟随左侧树：换库或文档增减时，默认勾选当前库的全部文档
+			React.useEffect(() => {
+				const ids = (current.nodes || []).filter((node) => node.kind === 'doc').map((node) => node.id);
+				setDocIds(ids);
+			}, [current.kbId, (current.nodes || []).length]);
 			React.useEffect(() => {
 				const el = listRef.current;
 				if (el) el.scrollTop = el.scrollHeight;
@@ -1225,7 +1231,7 @@ window.__ModuleLoader__.load({
 					const data = await api('/exam/suggest', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId }),
+						body: JSON.stringify({ kbId, docIds }),
 					});
 					setObjectives(data.objectives || []);
 					setPicked(-1);
@@ -1244,7 +1250,7 @@ window.__ModuleLoader__.load({
 					const data = await api('/exam/start', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ kbId, objective: text }),
+						body: JSON.stringify({ kbId, objective: text, docIds }),
 					});
 					setPlan(data);
 					setStep('outline');
@@ -1326,19 +1332,29 @@ window.__ModuleLoader__.load({
 
 			// ① 选库
 			if (step === 'setup') {
+				const docs = (current.nodes || []).filter((node) => node.kind === 'doc');
 				return h('div', { className: 'dsh-kb-exam' },
 					stepsBar,
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
-						h('p', { className: 'dsh-kb-examLead' }, '选一个知识库，我读一遍，给你三个学习目标。'),
-						h('label', { className: 'dsh-kb-examField' },
-							h('span', null, '知识库'),
-							h('select', {
-								className: 'dsh-kb-select',
-								value: kbId,
-								onChange: (event) => setKbId(event.target.value),
-							}, current.kbs.map((kb) => h('option', { key: kb.id, value: kb.id }, `${kb.name}（${kb.docs ?? 0} 篇）`)))),
-						h('p', { className: 'dsh-kb-hint' }, '暂时只支持单库对练。多库组合和冲突考点在后面的版本里。'),
+						h('p', { className: 'dsh-kb-examLead' }, '左边已经选好知识库了。勾上要考的文件，我读这几篇，给你三个学习目标。'),
+						h('div', { className: 'dsh-kb-examScope' },
+							h('span', { className: 'dsh-kb-examScopeLabel' }, `范围：${current.kbs.find((kb) => kb.id === kbId)?.name ?? '未选库'}（已选 ${docIds.length} / 共 ${docs.length} 篇）`),
+							h('span', { className: 'dsh-kb-viewerGrow' }),
+							h('button', { type: 'button', className: 'dsh-kb-examScopeBtn', onClick: () => setDocIds(docs.map((doc) => doc.id)) }, '全选'),
+							h('button', { type: 'button', className: 'dsh-kb-examScopeBtn', onClick: () => setDocIds([]) }, '清空')),
+						h('div', { className: 'dsh-kb-examDocs' },
+							docs.length === 0
+								? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先在左边上传。')
+								: docs.map((doc) => h('label', { key: doc.id, className: 'dsh-kb-examDoc' },
+									h('input', {
+										type: 'checkbox',
+										checked: docIds.includes(doc.id),
+										onChange: () => setDocIds((list) => (list.includes(doc.id) ? list.filter((id) => id !== doc.id) : [...list, doc.id])),
+									}),
+									h('span', { className: 'dsh-kb-examDocName' }, doc.name),
+									h('span', { className: 'dsh-kb-examDocMeta' }, `${String(doc.ext || '').replace(/^\./, '')}${doc.chars ? ` · ${doc.chars} 字` : ''}`)))),
+						h('p', { className: 'dsh-kb-hint' }, '勾哪几篇就只考哪几篇；全不勾等于整库。'),
 					h('div', { className: cx('dsh-kb-examModel', diag && !diag.ok && 'dsh-kb-examModel--bad') },
 						diag === null
 							? '正在检查模型…'
@@ -1348,7 +1364,7 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'dsh-kb-examActions' },
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-								disabled: Boolean(busy) || !kbId,
+								disabled: Boolean(busy) || !docs.length,
 								onClick: suggest,
 							}, busy || '开始分析'))));
 			}
@@ -2395,6 +2411,15 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examWeakRow{display:flex;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-examModel{font-size:12px;color:var(--dsw-alias-label-secondary);padding:6px 9px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-examModel--bad{color:#cf222e;background:transparent;border:1px dashed #cf222e;}',
+				'.dsh-kb-examScope{display:flex;align-items:center;gap:8px;font-size:12.5px;}',
+				'.dsh-kb-examScopeLabel{color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examScopeBtn{padding:2px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:11.5px;cursor:pointer;}',
+				'.dsh-kb-examScopeBtn:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-examDocs{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow:auto;padding:4px 2px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;}',
+				'.dsh-kb-examDoc{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;font-size:12.5px;cursor:pointer;}',
+				'.dsh-kb-examDoc:hover{background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-examDocName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+				'.dsh-kb-examDocMeta{color:var(--dsw-alias-label-secondary);font-size:11px;white-space:nowrap;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();

@@ -210,6 +210,18 @@ const turnRows = exam.turnsOf(session.id);
 check('turn 数 >= 题数', turnRows.length >= asked, `${turnRows.length} vs ${asked}`);
 check('历史列表能查到', exam.listSessions(5).some((item) => item.id === session.id));
 
+console.log('\n[6] 范围：只考选中的文件');
+{
+	const scoped = await exam.start({ kbId, objective: objectives[0].text, docIds: ['d_blast'] });
+	check('会话记住范围', JSON.stringify(scoped.session.docIds) === JSON.stringify(['d_blast']), JSON.stringify(scoped.session.docIds));
+	const inScope = scoped.outline.every((kp) => kp.docIds.every((docId) => docId === 'd_blast'));
+	check('知识点只落在选中的文档里', inScope, JSON.stringify(scoped.outline.map((kp) => kp.docIds)));
+	const scoped2 = await exam.suggestObjectives({ kbId, docIds: ['d_smut'] });
+	check('提议目标也能限定范围', scoped2.length >= 1);
+	let threw = false;
+	try { await exam.start({ kbId, objective: 'x', docIds: ['d_not_exist'] }); } catch { threw = true; }
+	check('范围全都不存在时报错而不是退化成整库', threw);
+}
 store.close();
 fs.rmSync(root, { recursive: true, force: true });
 
