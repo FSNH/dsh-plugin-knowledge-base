@@ -1669,12 +1669,12 @@ window.__ModuleLoader__.load({
 							type: 'button',
 							className: cx('dsh-kb-segBtn', current.dashOpen && !current.showSettings && 'dsh-kb-segBtn--on'),
 							onClick: () => patch({ dashOpen: true, showSettings: false, examOpen: false }),
-						}, '看板'),
+						}, '数据看板'),
 						h('button', {
 							type: 'button',
 							className: cx('dsh-kb-segBtn', current.examOpen && !current.showSettings && 'dsh-kb-segBtn--on'),
 							onClick: () => patch({ dashOpen: false, showSettings: false, examOpen: true }),
-						}, '对练')),
+						}, 'AI 实战对练')),
 					h('button', {
 						type: 'button', className: 'dsh-kb-btn',
 						onClick: () => {

@@ -498,7 +498,8 @@ console.log('\n[9] 对练面板');
 	// 默认视图里能看到「对练」入口
 	internals.patch({ dashOpen: false, showSettings: false, examOpen: false, dashData: null });
 	const page = renderPage();
-	check('顶部有「对练」tab', page.some((node) => String(node.props?.children || '') === '对练'));
+	check('顶部有「AI 实战对练」tab', page.some((node) => String(node.props?.children || '') === 'AI 实战对练'));
+	check('顶部有「数据看板」tab', page.some((node) => String(node.props?.children || '') === '数据看板'));
 
 	// 切到对练：第一步是选库，且不抛错
 	internals.patch({ examOpen: true, kbs: [{ id: 'k1', name: '我的资料库', docs: 3 }], kbId: 'k1' });
