@@ -1175,6 +1175,7 @@ window.__ModuleLoader__.load({
 			const [openedRun, setOpenedRun] = React.useState(null);
 			const [recordFor, setRecordFor] = React.useState(null);
 			const [sideWidth, setSideWidth] = React.useState(356);
+			const [detailFor, setDetailFor] = React.useState('');
 
 			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
 			const setDocIds = (next) => patch({ examPicked: typeof next === 'function' ? next(docIds) : next });
@@ -1333,32 +1334,47 @@ window.__ModuleLoader__.load({
 								item.comment ? h('span', null, item.comment) : null))));
 				};
 
-				const card = (topic) => h('div', { key: topic.id, className: 'dsh-kb-topic' },
-					h('div', { className: 'dsh-kb-topicHead' },
-						h('div', { className: 'dsh-kb-topicTitle' }, topic.objective),
-						h('span', { className: 'dsh-kb-viewerGrow' }),
-						h('button', {
-							type: 'button', className: 'dsh-kb-examMini',
-							onClick: () => removeTopic(topic),
-							title: '删除这个学习主题（不动文档）',
-						}, '删除')),
-					h('div', { className: 'dsh-kb-topicMeta' },
-						`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
-					h('div', { className: 'dsh-kb-topicKps' },
-						topic.outline.map((kp, index) => h('span', { key: kp.id ?? index, className: 'dsh-kb-topicKp' },
-							`${index + 1}. ${kp.title}`))),
-					h('div', { className: 'dsh-kb-topicFoot' },
-						h('button', {
-							type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
-							onClick: () => startChat(topic),
-						}, '开始 AI 对练'),
-						h('button', {
-							type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && 'dsh-kb-examMini--on'),
-							onClick: () => toggleRuns(topic),
-						}, recordFor?.id === topic.id ? '关闭记录' : '对练记录'),
-						h('span', { className: 'dsh-kb-hint' }, '会打开会话，把考官 prompt 预填进去')));
+				// 卡片统一高度：默认只显示 2 行标题 + 一行元信息，大纲等细节收进「详情」
+				const card = (topic) => {
+					const open = detailFor === topic.id;
+					return h('div', { key: topic.id, className: 'dsh-kb-topic' },
+						h('div', { className: 'dsh-kb-topicHead' },
+							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2' }, topic.objective),
+							h('button', {
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => removeTopic(topic),
+								title: '删除这个学习主题（不动文档）',
+							}, '删除')),
+						h('div', { className: 'dsh-kb-topicMeta' },
+							`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
+						open
+							? h('div', { className: 'dsh-kb-topicDetail' },
+								h('div', { className: 'dsh-kb-topicKps' },
+									topic.outline.map((kp, index) => h('span', { key: kp.id ?? index, className: 'dsh-kb-topicKp' },
+										`${index + 1}. ${kp.title}`))),
+								topic.docIds.length
+									? h('p', { className: 'dsh-kb-hint' }, `考 ${topic.docIds.length} 篇文档`)
+									: h('p', { className: 'dsh-kb-hint' }, '考整库'))
+							: null,
+						h('div', { className: 'dsh-kb-topicFoot' },
+							h('button', {
+								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+								onClick: () => startChat(topic),
+							}, '开始 AI 对练'),
+							h('button', {
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => setDetailFor(open ? '' : topic.id),
+							}, open ? '收起详情' : '详情'),
+							h('button', {
+								type: 'button', className: cx('dsh-kb-examMini', recordFor?.id === topic.id && 'dsh-kb-examMini--on'),
+								onClick: () => toggleRuns(topic),
+							}, recordFor?.id === topic.id ? '关闭记录' : '对练记录')));
+				};
 
-				const leftColumn = h('div', { className: 'dsh-kb-examCol' },
+				const leftColumn = h('div', {
+					className: 'dsh-kb-examCol',
+					style: { flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px', overflow: 'auto' },
+				},
 					h('div', { className: 'dsh-kb-examHead' },
 						h('div', { className: 'dsh-kb-examTitle' }, '学习主题'),
 						h('span', { className: 'dsh-kb-examScopeLabel' }, topics === null ? '加载中…' : `${list.length} 个`),
@@ -1380,43 +1396,47 @@ window.__ModuleLoader__.load({
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								onClick: () => { setView('scope'); setError(''); setNotice(''); },
 							}, '新建学习主题'))
-						: h('div', { className: 'dsh-kb-topicList' }, list.map(card)));
+						: h('div', { className: 'dsh-kb-topicList', style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+							list.map(card)));
 
 				// 右列只在点了「对练记录」之后才存在，默认不占位、不空着
 				const rightColumn = !recordFor ? null : h('div', {
 					className: 'dsh-kb-examSide',
-					style: { width: `${sideWidth}px` },
+					style: { flex: '0 0 auto', width: `${sideWidth}px`, display: 'flex', flexDirection: 'column', padding: '12px', border: '1px solid var(--dsw-alias-border-l1)', borderRadius: '12px', background: 'var(--dsw-alias-bg-layer-1)', overflow: 'auto' },
 				},
 					h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
-						h('div', { className: 'dsh-kb-examSideInner' },
-							h('div', { className: 'dsh-kb-examSideHead' },
-								h('div', { className: 'dsh-kb-examTitle' }, '对练记录'),
-								h('span', { className: 'dsh-kb-examScopeLabel' }, `${runs.length} 次`),
-								h('span', { className: 'dsh-kb-viewerGrow' }),
-								h('button', {
-									type: 'button', className: 'dsh-kb-examMini',
-									onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); },
-									title: '关闭',
-								}, h(Icon, { name: 'close', size: 12 }))),
-							h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
-							runs.length === 0
-								? h('div', { className: 'dsh-kb-runEmpty' },
-									h('p', { className: 'dsh-kb-hint' }, '这个主题还没有对练记录。'),
-									h('p', { className: 'dsh-kb-hint' }, '点「开始 AI 对练」，每答完一题 AI 会调用 kb_exam_log 记下来；'),
-									h('p', { className: 'dsh-kb-hint' }, '如果刚练过却没有记录，多半是会话里没调那个工具。'))
-								: h('div', { className: 'dsh-kb-runList' },
-									runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
-										h('button', {
-											type: 'button',
-											className: cx('dsh-kb-runHead', openedRun?.id === run.id && 'dsh-kb-runHead--on'),
-											onClick: () => openRun(run),
-										},
-											h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
-											h('span', { className: 'dsh-kb-runMeta' },
-												`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}`)),
-										runDetail(run))))));
+					h('div', { className: 'dsh-kb-examSideInner', style: { display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 } },
+						h('div', { className: 'dsh-kb-examSideHead' },
+							h('div', { className: 'dsh-kb-examTitle' }, '对练记录'),
+							h('span', { className: 'dsh-kb-examScopeLabel' }, `${runs.length} 次`),
+							h('span', { className: 'dsh-kb-viewerGrow' }),
+							h('button', {
+								type: 'button', className: 'dsh-kb-examMini',
+								onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); },
+								title: '关闭',
+							}, h(Icon, { name: 'close', size: 12 }))),
+						h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
+						runs.length === 0
+							? h('div', { className: 'dsh-kb-runEmpty' },
+								h('p', { className: 'dsh-kb-hint' }, '这个主题还没有对练记录。'),
+								h('p', { className: 'dsh-kb-hint' }, '点「开始 AI 对练」，每答完一题 AI 会调用 kb_exam_log 记下来；'),
+								h('p', { className: 'dsh-kb-hint' }, '如果刚练过却没有记录，多半是会话里没调那个工具。'))
+							: h('div', { className: 'dsh-kb-runList' },
+								runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
+									h('button', {
+										type: 'button',
+										className: cx('dsh-kb-runHead', openedRun?.id === run.id && 'dsh-kb-runHead--on'),
+										onClick: () => openRun(run),
+									},
+										h('span', { className: 'dsh-kb-runTime' }, when(run.startedAt)),
+										h('span', { className: 'dsh-kb-runMeta' },
+											`${run.turns} 题${run.verdict ? ` · ${run.verdict === 'pass' ? '达成' : run.verdict === 'near' ? '接近' : '未达成'}` : ' · 未结束'}`)),
+									runDetail(run))))));
 
-				return h('div', { className: 'dsh-kb-exam dsh-kb-exam--split' }, leftColumn, rightColumn);
+				return h('div', {
+					className: 'dsh-kb-exam dsh-kb-exam--split',
+					style: { display: 'flex', flexDirection: 'row', alignItems: 'stretch', gap: '14px', overflow: 'hidden' },
+				}, leftColumn, rightColumn);
 			}
 
 
@@ -2425,12 +2445,12 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examMini--on{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-runEmpty{display:flex;flex-direction:column;gap:4px;}',
 				'.dsh-kb-runEmpty .dsh-kb-hint{margin:0;}',
-				'.dsh-kb-exam--split{flex-direction:row;align-items:stretch;gap:14px;overflow:hidden;}',
-				'.dsh-kb-examCol{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;overflow:auto;}',
-				'.dsh-kb-examSide{position:relative;flex:none;display:flex;flex-direction:column;padding:12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:auto;}',
-				'.dsh-kb-examSideInner{display:flex;flex-direction:column;gap:8px;min-height:0;}',
 				'.dsh-kb-examSideHandle{position:absolute;left:-6px;top:8px;bottom:8px;width:10px;cursor:col-resize;}',
 				'.dsh-kb-examSideHandle:hover{background:linear-gradient(90deg,transparent,rgba(127,127,127,.28));}',
+				'.dsh-kb-topic{padding:12px 14px;gap:6px;min-height:118px;justify-content:flex-start;}',
+				'.dsh-kb-clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}',
+				'.dsh-kb-topicDetail{display:flex;flex-direction:column;gap:6px;padding:8px 0 2px;border-top:1px dashed var(--dsw-alias-border-l1);}',
+				'.dsh-kb-topicDetail .dsh-kb-hint{margin:0;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
