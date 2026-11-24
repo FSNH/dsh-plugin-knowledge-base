@@ -507,9 +507,9 @@ console.log('\n[9] 对练面板');
 	// 容器 class 是 dsh-kb-examSteps，步骤本身是 dsh-kb-examStep（后面可能跟 --on/--done）
 	const stepNodes = exam.filter((node) => /^dsh-kb-examStep(\s|$)/.test(String(node.props?.className || '')));
 	check('步骤条有 5 步', stepNodes.length === 5, `实际 ${stepNodes.length}`);
-	check('有一句话说明勾选规则', exam.some((node) => String(node.props?.children || '').includes('全选等于整库')));
+	check('说明勾选在左侧完成', exam.some((node) => String(node.props?.children || '').includes('在左边文件树里勾选')));
 	check('工具条有全选/反选/清空', ['全选', '反选', '清空'].every((label) => exam.some((node) => String(node.props?.children || '') === label)));
-	check('范围跟着左侧树走（不再单独放下拉）', exam.some((node) => String(node.props?.children || '').includes('左边已选'))
+	check('右侧只回显（没有勾选框列表）', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examPicks')
 		&& !exam.some((node) => String(node.props?.className || '').includes('dsh-kb-examKb')));
 	check('底部有预估计数与开始按钮', exam.some((node) => String(node.props?.className || '') === 'dsh-kb-examFoot')
 		&& exam.some((node) => String(node.props?.children || '') === '开始分析'));

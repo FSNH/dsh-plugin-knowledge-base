@@ -133,6 +133,7 @@ window.__ModuleLoader__.load({
 			showSettings: false,
 			dashOpen: false,
 			examOpen: false,
+			examPicked: [],
 			dashData: null,
 			dashError: '',
 			dashLoading: false,
@@ -418,6 +419,18 @@ window.__ModuleLoader__.load({
 		function TreeRows({ byParent, parentKey, depth }) {
 			const current = useStore();
 			const list = byParent.get(parentKey) || [];
+			// 勾文件夹 = 勾它下面（含子文件夹）的全部文档
+			const docsUnder = (folderId) => {
+				const out = [];
+				const walk = (parentId) => {
+					for (const child of byParent.get(parentId) || []) {
+						if (child.kind === 'doc') out.push(child.id);
+						else walk(child.id);
+					}
+				};
+				walk(folderId);
+				return out;
+			};
 			return list.map((node) => {
 				const isFolder = node.kind === 'folder';
 				const open = current.expanded[node.id] !== false;
@@ -472,6 +485,32 @@ window.__ModuleLoader__.load({
 						},
 						title: `${node.name}${node.kind === 'doc' ? ` · ${bytes(node.bytes)}` : ''}`,
 					},
+					current.examOpen
+						? (() => {
+							// 对练模式：左侧直接勾选，右侧只显示结果
+							const pickedIds = Array.isArray(current.examPicked) ? current.examPicked : [];
+							const ids = isFolder ? docsUnder(node.id) : [node.id];
+							const on = ids.length > 0 && ids.every((id) => pickedIds.includes(id));
+							const partial = !on && ids.some((id) => pickedIds.includes(id));
+							return h('input', {
+								type: 'checkbox',
+								className: 'dsh-kb-rowPick',
+								checked: on,
+								'aria-label': '选择 ' + node.name,
+								ref: isFolder ? (el) => { if (el) el.indeterminate = partial; } : undefined,
+								onClick: (event) => event.stopPropagation(),
+								onChange: (event) => {
+									event.stopPropagation();
+									const allOn = ids.length > 0 && ids.every((id) => pickedIds.includes(id));
+									patch({
+										examPicked: allOn
+											? pickedIds.filter((id) => !ids.includes(id))
+											: [...new Set([...pickedIds, ...ids])],
+									});
+								},
+							});
+						})()
+						: null,
 					h('span', { className: cx('dsh-kb-caret', isFolder && open && 'dsh-kb-caret--open') },
 						isFolder ? h(Icon, { name: 'chevron', size: 12 }) : null),
 					h('span', { className: 'dsh-kb-rowIcon' }, h(Icon, { name: isFolder ? (open ? 'folderOpen' : 'folder') : 'doc', size: 14 })),
@@ -1141,17 +1180,20 @@ window.__ModuleLoader__.load({
 			const [board, setBoard] = React.useState([]);
 			const [asking, setAsking] = React.useState(0);
 			const [diag, setDiag] = React.useState(null);
-			const [docIds, setDocIds] = React.useState([]);
+			// 勾选状态放在共享 store 里：左侧文件树和这个面板看到的是同一份
+			const docIds = Array.isArray(current.examPicked) ? current.examPicked : [];
+			const setDocIds = (next) => patch({ examPicked: typeof next === 'function' ? next(docIds) : next });
 			const [docFilter, setDocFilter] = React.useState('');
 			const abortRef = React.useRef(null);
 			const listRef = React.useRef(null);
 			const inputRef = React.useRef(null);
 
 			React.useEffect(() => () => { try { abortRef.current?.abort(); } catch { /* ignore */ } }, []);
-			// 范围跟随左侧树：换库或文档增减时，默认勾选当前库的全部文档
+			// 换库或文档增减：去掉不存在的勾选；换库后默认全选
 			React.useEffect(() => {
 				const ids = (current.nodes || []).filter((node) => node.kind === 'doc').map((node) => node.id);
-				setDocIds(ids);
+				const kept = (current.examPicked || []).filter((id) => ids.includes(id));
+				patch({ examPicked: kept.length ? kept : ids });
 			}, [current.kbId, (current.nodes || []).length]);
 			React.useEffect(() => {
 				const el = listRef.current;
@@ -1338,13 +1380,10 @@ window.__ModuleLoader__.load({
 				const kbName = current.kbs.find((item) => item.id === current.kbId)?.name ?? '（左边还没选库）';
 				const picked = docs.filter((doc) => docIds.includes(doc.id));
 				const pickedChars = picked.reduce((sum, doc) => sum + (doc.chars || 0), 0);
-				const totalChars = docs.reduce((sum, doc) => sum + (doc.chars || 0), 0);
+				const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
 				const allSelected = docs.length > 0 && picked.length === docs.length;
 				const canStart = Boolean(current.kbId) && picked.length > 0;
-				const size = (n) => (n >= 10000 ? `约 ${Math.round(n / 1000)}k 字` : `${n} 字`);
 				const byParent = buildTree(current.nodes || []);
-
-				// 某个文件夹下面（含子文件夹）的所有文档 id
 				const docsUnder = (folderId) => {
 					const out = [];
 					const walk = (parentId) => {
@@ -1356,86 +1395,70 @@ window.__ModuleLoader__.load({
 					walk(folderId);
 					return out;
 				};
-				const toggleDocs = (ids) => setDocIds((list) => {
-					const allOn = ids.length > 0 && ids.every((id) => list.includes(id));
-					return allOn ? list.filter((id) => !ids.includes(id)) : [...new Set([...list, ...ids])];
-				});
+				const setPicked = (ids) => patch({ examPicked: ids });
 
-				// 逐层画：勾文件夹 = 勾它下面全部文档
-				const treeRows = [];
-				const drawLevel = (parentId, depth) => {
+				// 右侧只做"结果回显"：列出被选中的文件夹和文件（缩进跟左边一致）
+				const summaryRows = [];
+				const drawPicked = (parentId, depth) => {
 					for (const node of byParent.get(parentId) || []) {
 						if (node.kind === 'folder') {
 							const ids = docsUnder(node.id);
-							const on = ids.length > 0 && ids.every((id) => docIds.includes(id));
-							const partial = !on && ids.some((id) => docIds.includes(id));
-							treeRows.push(h('label', {
+							const hit = ids.filter((id) => docIds.includes(id));
+							if (!hit.length) continue;
+							const whole = hit.length === ids.length;
+							summaryRows.push(h('div', {
 								key: node.id,
-								className: cx('dsh-kb-examDoc', 'dsh-kb-examDoc--folder', on && 'dsh-kb-examDoc--on'),
-								style: { paddingLeft: `${8 + depth * 14}px` },
-								title: `${node.name}（${ids.length} 篇）`,
+								className: 'dsh-kb-examPick dsh-kb-examPick--folder',
+								style: { paddingLeft: `${2 + depth * 14}px` },
 							},
-								h('input', {
-									type: 'checkbox',
-									checked: on,
-									ref: (el) => { if (el) el.indeterminate = partial; },
-									onChange: () => { if (ids.length) toggleDocs(ids); },
-								}),
 								h(Icon, { name: 'folder', size: 13 }),
-								h('span', { className: 'dsh-kb-examDocName' }, node.name),
-								h('span', { className: 'dsh-kb-examDocMeta' }, `${ids.length} 篇`)));
-							drawLevel(node.id, depth + 1);
+								h('span', { className: 'dsh-kb-examPickName' }, node.name),
+								h('span', { className: 'dsh-kb-examPickMeta' }, whole ? `${ids.length} 篇` : `${hit.length}/${ids.length} 篇`)));
+							drawPicked(node.id, depth + 1);
 							continue;
 						}
-						const on = docIds.includes(node.id);
+						if (!docIds.includes(node.id)) continue;
 						const ext = String(node.ext || '').replace(/^\./, '').toUpperCase();
-						treeRows.push(h('label', {
+						summaryRows.push(h('div', {
 							key: node.id,
-							className: cx('dsh-kb-examDoc', on && 'dsh-kb-examDoc--on'),
-							style: { paddingLeft: `${8 + depth * 14}px` },
+							className: 'dsh-kb-examPick',
+							style: { paddingLeft: `${2 + depth * 14}px` },
 							title: node.name,
 						},
-							h('input', {
-								type: 'checkbox',
-								checked: on,
-								onChange: () => setDocIds((list) => (list.includes(node.id) ? list.filter((id) => id !== node.id) : [...list, node.id])),
-							}),
 							h('span', { className: 'dsh-kb-examDocExt' }, ext || 'FILE'),
-							h('span', { className: 'dsh-kb-examDocName' }, node.name),
-							h('span', { className: 'dsh-kb-examDocMeta' }, node.chars ? size(node.chars) : '—')));
+							h('span', { className: 'dsh-kb-examPickName' }, node.name),
+							h('span', { className: 'dsh-kb-examPickMeta' }, node.chars ? size(node.chars) : '—')));
 					}
 				};
-				drawLevel('', 0);
+				drawPicked('', 0);
 
 				return h('div', { className: 'dsh-kb-exam' },
 					stepsBar,
 					errorBar,
 					h('div', { className: 'dsh-kb-examCard' },
-						// 知识库不再单独放一个下拉：范围跟着左边树走
 						h('div', { className: 'dsh-kb-examHead' },
-							h('div', { className: 'dsh-kb-examTitle' }, '选对练范围'),
-							h('span', { className: 'dsh-kb-examScopeLabel' }, `左边已选：${kbName}`)),
-						h('div', { className: 'dsh-kb-examPickerBar' },
-							h('span', { className: 'dsh-kb-examPickerCount' },
-								`已选 ${picked.length} / ${docs.length} 篇${allSelected ? '（整库）' : ''}`),
+							h('div', { className: 'dsh-kb-examTitle' }, '对练范围'),
+							h('span', { className: 'dsh-kb-examScopeLabel' }, `已选：${kbName} · ${picked.length}/${docs.length} 篇`),
 							h('span', { className: 'dsh-kb-viewerGrow' }),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => setDocIds(docs.map((doc) => doc.id)),
+								onClick: () => setPicked(docs.map((doc) => doc.id)),
 							}, '全选'),
 							h('button', {
 								type: 'button', className: 'dsh-kb-examMini',
-								onClick: () => setDocIds(docs.filter((doc) => !docIds.includes(doc.id)).map((doc) => doc.id)),
+								onClick: () => setPicked(docs.filter((doc) => !docIds.includes(doc.id)).map((doc) => doc.id)),
 							}, '反选'),
-							h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setDocIds([]) }, '清空')),
-						h('div', { className: 'dsh-kb-examDocs dsh-kb-examDocs--tree' },
+							h('button', { type: 'button', className: 'dsh-kb-examMini', onClick: () => setPicked([]) }, '清空')),
+						h('div', { className: 'dsh-kb-examPicks' },
 							!current.kbId
 								? h('p', { className: 'dsh-kb-hint' }, '先在左边选一个知识库。')
 								: docs.length === 0
 									? h('p', { className: 'dsh-kb-hint' }, '这个库里还没有文档，先上传。')
-									: treeRows),
+									: picked.length === 0
+										? h('p', { className: 'dsh-kb-hint' }, '左边还没勾选任何文件——勾一下，这里会显示你选了什么。')
+										: summaryRows),
 						h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
-							'右上角的下拉也能换库；勾文件或文件夹都可以，全选等于整库对练。'),
+							'在左边文件树里勾选（文件夹可以整块勾）；这里只回显结果。'),
 						h('div', { className: cx('dsh-kb-examModel', diag && diag.ready === false && 'dsh-kb-examModel--bad') },
 							h(Icon, { name: diag && diag.ready === false ? 'warn' : 'spark', size: 13 }),
 							h('span', null, diag === null
@@ -1445,7 +1468,7 @@ window.__ModuleLoader__.load({
 									: `用不了模型：${diag.message ?? '原因未知'}（先去设置里配一个，或在会话里选一个）`)),
 						h('div', { className: 'dsh-kb-examFoot' },
 							h('span', { className: 'dsh-kb-examFootHint' },
-								allSelected ? `整库：${docs.length} 篇 · ${size(totalChars)}` : `将用 ${picked.length} 篇 · ${size(pickedChars)} 出题`),
+								allSelected ? `整库：${docs.length} 篇 · ${size(pickedChars)}` : `将用 ${picked.length} 篇 · ${size(pickedChars)} 出题`),
 							h('button', {
 								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
 								disabled: Boolean(busy) || !canStart,
@@ -2531,6 +2554,12 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examModel{display:flex;align-items:center;gap:6px;}',
 				'.dsh-kb-examDoc--folder{color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-examDoc--folder .dsh-kb-examDocName{color:var(--dsw-alias-label-primary);font-weight:500;}',
+				'.dsh-kb-examPicks{display:flex;flex-direction:column;gap:3px;max-height:320px;overflow:auto;padding:8px 4px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;}',
+				'.dsh-kb-examPick{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 4px;border-radius:6px;}',
+				'.dsh-kb-examPick--folder{color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examPickName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+				'.dsh-kb-examPickMeta{color:var(--dsw-alias-label-secondary);font-size:11px;white-space:nowrap;}',
+				'.dsh-kb-rowPick{margin:0 2px 0 0;flex:none;cursor:pointer;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
