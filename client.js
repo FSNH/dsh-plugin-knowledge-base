@@ -1207,6 +1207,8 @@ window.__ModuleLoader__.load({
 			const [runs, setRuns] = React.useState([]);
 			const [openedRun, setOpenedRun] = React.useState(null);
 			const [openItems, setOpenItems] = React.useState([]);
+			// 卡片右下角「⋯」菜单（详情 / 删除）
+			const [menuFor, setMenuFor] = React.useState('');
 			// 右侧栏显示哪个：对练记录 or 题库
 			const [sideView, setSideView] = React.useState('runs');
 			const [quizItems, setQuizItems] = React.useState([]);
@@ -1308,6 +1310,14 @@ window.__ModuleLoader__.load({
 			}
 
 			// 拖左边缘调宽：侧栏贴在右边，所以宽度 = 视口右边到指针的距离
+			// 菜单开着时，点页面其它地方就收起
+			React.useEffect(() => {
+				if (!menuFor) return undefined;
+				const close = () => setMenuFor('');
+				window.addEventListener('mousedown', close);
+				return () => window.removeEventListener('mousedown', close);
+			}, [menuFor]);
+
 			function startResize(event) {
 				event.preventDefault();
 				const onMove = (moveEvent) => {
@@ -1432,8 +1442,10 @@ window.__ModuleLoader__.load({
 
 				// 卡片统一高度：默认只显示 2 行标题 + 一行元信息，大纲等细节收进「详情」
 				// 卡片统一高度：默认只显示 2 行标题 + 一行元信息，大纲等细节收进「详情」
+				// 卡片：标题 + 元信息 + 底部两组按钮 + 右下角「⋯」菜单（详情/删除）
 				const card = (topic) => {
 					const open = detailFor === topic.id;
+					const menuOpen = menuFor === topic.id;
 					return h('div', { key: topic.id, className: 'dsh-kb-topic' },
 						h('div', { className: 'dsh-kb-topicHead' },
 							h('div', { className: 'dsh-kb-topicTitle dsh-kb-clamp2', title: topic.objective }, topic.objective)),
@@ -1448,39 +1460,48 @@ window.__ModuleLoader__.load({
 									? h('p', { className: 'dsh-kb-hint' }, `考 ${topic.docIds.length} 篇文档`)
 									: h('p', { className: 'dsh-kb-hint' }, '考整库'))
 							: null,
-				h('div', { className: 'dsh-kb-topicFoot' },
-					h('div', { className: 'dsh-kb-btnGroup' },
-						h('button', {
-							type: 'button', className: 'dsh-kb-gBtn dsh-kb-gBtn--primary',
-							onClick: () => startChat(topic, 'spar'),
-							title: '一问一答，AI 追问、点评、给达成判定',
-						}, 'AI 对练'),
-						h('button', {
-							type: 'button', className: 'dsh-kb-gBtn',
-							onClick: () => startChat(topic, 'quiz'),
-							title: '单选/多选为主，判完对错顺手存进题库',
-						}, '刷题')),
-					h('div', { className: 'dsh-kb-btnGroup' },
-						h('button', {
-							type: 'button',
-							className: cx('dsh-kb-gBtn', recordFor?.id === topic.id && sideView === 'runs' && 'dsh-kb-gBtn--on'),
-							onClick: () => toggleRuns(topic),
-						}, '对练记录'),
-						h('button', {
-							type: 'button',
-							className: cx('dsh-kb-gBtn', recordFor?.id === topic.id && sideView === 'quiz' && 'dsh-kb-gBtn--on'),
-							onClick: () => toggleQuiz(topic),
-						}, '题库')),
-					h('div', { className: 'dsh-kb-btnGroup' },
-						h('button', {
-							type: 'button', className: 'dsh-kb-gBtn',
-							onClick: () => setDetailFor(open ? '' : topic.id),
-						}, open ? '收起' : '详情'),
-						h('button', {
-							type: 'button', className: 'dsh-kb-gBtn dsh-kb-gBtn--danger',
-							onClick: () => removeTopic(topic),
-							title: '删除这个学习主题（不动文档）',
-						}, '删除'))));
+						h('div', { className: 'dsh-kb-topicFoot' },
+							h('div', { className: 'dsh-kb-btnGroup' },
+								h('button', {
+									type: 'button', className: 'dsh-kb-gBtn dsh-kb-gBtn--primary',
+									onClick: () => startChat(topic, 'spar'),
+									title: '一问一答，AI 追问、点评、给达成判定',
+								}, 'AI 对练'),
+								h('button', {
+									type: 'button', className: 'dsh-kb-gBtn',
+									onClick: () => startChat(topic, 'quiz'),
+									title: '单选/多选为主，判完对错顺手存进题库',
+								}, '刷题')),
+							h('div', { className: 'dsh-kb-btnGroup' },
+								h('button', {
+									type: 'button',
+									className: cx('dsh-kb-gBtn', recordFor?.id === topic.id && sideView === 'runs' && 'dsh-kb-gBtn--on'),
+									onClick: () => toggleRuns(topic),
+								}, '对练记录'),
+								h('button', {
+									type: 'button',
+									className: cx('dsh-kb-gBtn', recordFor?.id === topic.id && sideView === 'quiz' && 'dsh-kb-gBtn--on'),
+									onClick: () => toggleQuiz(topic),
+								}, '题库')),
+							h('span', { className: 'dsh-kb-viewerGrow' }),
+							h('span', { className: 'dsh-kb-menuWrap' },
+								h('button', {
+									type: 'button',
+									className: cx('dsh-kb-menuBtn', menuOpen && 'dsh-kb-menuBtn--on'),
+									onClick: () => setMenuFor(menuOpen ? '' : topic.id),
+									title: '更多',
+								}, '⋯'),
+								menuOpen
+									? h('div', { className: 'dsh-kb-menu' },
+										h('button', {
+											type: 'button', className: 'dsh-kb-menuItem',
+											onClick: () => { setMenuFor(''); setDetailFor(open ? '' : topic.id); },
+										}, open ? '收起详情' : '详情'),
+										h('button', {
+											type: 'button', className: 'dsh-kb-menuItem dsh-kb-menuItem--danger',
+											onClick: () => { setMenuFor(''); removeTopic(topic); },
+										}, '删除'))
+									: null)));
 				};
 
 				const leftColumn = h('div', {
@@ -2647,6 +2668,14 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-gBtn--primary:hover{filter:brightness(1.08);}',
 				'.dsh-kb-gBtn--danger{color:#cf222e;}',
 				'.dsh-kb-gBtn--danger:hover{background:rgba(207,34,46,.12);}',
+				'.dsh-kb-menuWrap{position:relative;display:inline-flex;flex:none;}',
+				'.dsh-kb-menuBtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:26px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:15px;line-height:1;cursor:pointer;}',
+				'.dsh-kb-menuBtn:hover,.dsh-kb-menuBtn--on{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-menu{position:absolute;right:0;bottom:calc(100% + 6px);z-index:30;min-width:128px;display:flex;flex-direction:column;padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1));box-shadow:0 10px 28px rgba(0,0,0,.28);}',
+				'.dsh-kb-menuItem{display:flex;align-items:center;padding:7px 10px;border:none;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:12.5px;line-height:1.2;text-align:left;cursor:pointer;white-space:nowrap;}',
+				'.dsh-kb-menuItem:hover{background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-menuItem--danger{color:#cf222e;}',
+				'.dsh-kb-menuItem--danger:hover{background:rgba(207,34,46,.12);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
