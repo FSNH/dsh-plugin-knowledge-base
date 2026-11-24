@@ -20,6 +20,8 @@ import { createKnowledgeBaseTools } from './lib/tools.mjs';
 import { createSettingsStore } from './lib/settings.mjs';
 import { createVisionClient } from './lib/vision.mjs';
 import { createRoutes } from './lib/routes.mjs';
+import { createExam } from './lib/exam/engine.mjs';
+import { createExamChat } from './lib/exam/chat.mjs';
 
 export const name = 'dsh-knowledge-base';
 export const inject = ['webServer'];
@@ -80,8 +82,12 @@ export function apply(ctx, config = {}) {
 	// ── HTTP 路由 ──────────────────────────────────────────────────────────
 	// 二进制预览（<img>/<iframe>）带不了自定义头，给它一条带启动令牌的通道。
 	const token = crypto.randomUUID();
+	// 对练引擎：模型走 ctx.llm（懒取，宿主没挂时给清晰报错）
+	const examChat = createExamChat({ getLlm: () => ctx.get('llm'), logger });
+	const exam = createExam({ store, index, chat: examChat.chat, logger });
+
 	const { routes } = createRoutes({
-		store, index, pipeline, embedder, vision, settings, config, logger, webServer, token, previewer,
+		store, index, pipeline, embedder, vision, settings, config, logger, webServer, token, previewer, exam,
 	});
 	for (const route of routes) {
 		ctx.effect(() => webServer.register(route), `knowledge-base: ${route.path}`);
