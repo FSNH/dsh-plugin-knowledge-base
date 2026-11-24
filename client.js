@@ -1286,6 +1286,15 @@ window.__ModuleLoader__.load({
 			}
 
 			async function toggleRuns(topic) {
+				if (recordFor?.id === topic.id && sideView === 'runs') { setRecordFor(null); setRuns([]); setOpenedRun(null); return; }
+				setRecordFor(topic); setSideView('runs'); setRuns([]); setOpenedRun(null); setSideFull(false);
+				try {
+					const data = await api(`/exam/runs?topicId=${encodeURIComponent(topic.id)}`);
+					setRuns(data.runs || []);
+				} catch (err) {
+					setError(friendly(err));
+				}
+			}
 
 			async function toggleQuiz(topic) {
 				if (recordFor?.id === topic.id && sideView === 'quiz') { setRecordFor(null); setQuizItems([]); return; }
@@ -1293,15 +1302,6 @@ window.__ModuleLoader__.load({
 				try {
 					const data = await api(`/exam/quiz?topicId=${encodeURIComponent(topic.id)}`);
 					setQuizItems(data.items || []);
-				} catch (err) {
-					setError(friendly(err));
-				}
-			}
-				if (recordFor?.id === topic.id) { setRecordFor(null); setRuns([]); setOpenedRun(null); return; }
-				setRecordFor(topic); setSideView('runs'); setRuns([]); setOpenedRun(null); setSideFull(false);
-				try {
-					const data = await api(`/exam/runs?topicId=${encodeURIComponent(topic.id)}`);
-					setRuns(data.runs || []);
 				} catch (err) {
 					setError(friendly(err));
 				}
