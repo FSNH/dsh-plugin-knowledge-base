@@ -272,6 +272,8 @@ console.log('\n[8] 学习主题：对话设计 + 落库');
 	check('design prompt 要求调用 kb_topic_save', design.prompt.includes('kb_topic_save'));
 	check('design prompt 带上 docIds', design.prompt.includes('d_blast'));
 	check('design prompt 要求先确认再保存', design.prompt.includes('确认'));
+	check('保存后默认在当前会话开练', design.prompt.includes('直接就在这里当考官'));
+	check('允许"先存着"', design.prompt.includes('先存着'));
 
 	const saved = exam.saveTopic({
 		kbId,

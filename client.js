@@ -1368,7 +1368,8 @@ window.__ModuleLoader__.load({
 										h('span', { className: 'dsh-kb-examPickName' }, doc.name),
 										h('span', { className: 'dsh-kb-examPickMeta' }, doc.chars ? size(doc.chars) : '—')))),
 					h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
-						'下一步不在面板里做：会打开一个会话，AI 自己读这些文档，和你把学习目标与大纲谈定，然后写回知识库。'),
+						'下一步不在面板里做：会打开一个会话，AI 自己读这些文档，和你把学习目标与大纲谈定、写回知识库；'
+						+ '存好后它可以直接在同一个会话里开练，也可以之后回这里点卡片上的「开始 AI 对练」。'),
 					modelLine,
 					h('div', { className: 'dsh-kb-examFoot' },
 						h('span', { className: 'dsh-kb-examFootHint' }, `将用 ${picked.length} 篇 · ${size(picked.reduce((sum, doc) => sum + (doc.chars || 0), 0))}`),
