@@ -493,7 +493,25 @@ console.log('\n[8] 看板');
 	internals.patch({ dashOpen: false, dashData: null });
 }
 
-console.log('\n[9] 卸载清理');
+console.log('\n[9] 对练面板');
+{
+	// 默认视图里能看到「对练」入口
+	internals.patch({ dashOpen: false, showSettings: false, examOpen: false, dashData: null });
+	const page = renderPage();
+	check('顶部有「对练」tab', page.some((node) => String(node.props?.children || '') === '对练'));
+
+	// 切到对练：第一步是选库，且不抛错
+	internals.patch({ examOpen: true, kbs: [{ id: 'k1', name: '我的资料库', docs: 3 }], kbId: 'k1' });
+	const exam = renderPage();
+	check('对练第一步渲染「开始分析」', exam.some((node) => String(node.props?.children || '') === '开始分析'));
+	// 容器 class 是 dsh-kb-examSteps，步骤本身是 dsh-kb-examStep（后面可能跟 --on/--done）
+	const stepNodes = exam.filter((node) => /^dsh-kb-examStep(\s|$)/.test(String(node.props?.className || '')));
+	check('步骤条有 5 步', stepNodes.length === 5, `实际 ${stepNodes.length}`);
+	check('说明了只支持单库', exam.some((node) => String(node.props?.children || '').includes('单库对练')));
+	internals.patch({ examOpen: false });
+}
+
+console.log('\n[10] 卸载清理');
 try {
 	for (const dispose of disposers) dispose();
 	check('disposer 全部可调用', true);

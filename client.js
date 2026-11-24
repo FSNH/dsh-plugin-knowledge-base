@@ -132,6 +132,7 @@ window.__ModuleLoader__.load({
 			sideOpen: true,
 			showSettings: false,
 			dashOpen: false,
+			examOpen: false,
 			dashData: null,
 			dashError: '',
 			dashLoading: false,
@@ -1119,6 +1120,371 @@ window.__ModuleLoader__.load({
 		let sessionStarter = null;
 
 		/** 新文件/新文件夹落在哪：选中的文件夹 → 选中文件所在目录 → 根。 */
+		// ── 对练模式 ────────────────────────────────────────────────────────
+		// 四步一屏：选库 → 定目标 → 确认大纲 → 对练/报告。
+		// 对话内容全部来自 SSE（/exam/stream），答题走 POST /exam/answer。
+		function Exam() {
+			const current = useStore();
+			const [step, setStep] = React.useState('setup');
+			const [kbId, setKbId] = React.useState(current.kbId || '');
+			const [objectives, setObjectives] = React.useState([]);
+			const [objective, setObjective] = React.useState('');
+			const [picked, setPicked] = React.useState(-1);
+			const [plan, setPlan] = React.useState(null);
+			const [items, setItems] = React.useState([]);
+			const [answer, setAnswer] = React.useState('');
+			const [openTurn, setOpenTurn] = React.useState(null);
+			const [busy, setBusy] = React.useState('');
+			const [error, setError] = React.useState('');
+			const [report, setReport] = React.useState(null);
+			const [board, setBoard] = React.useState([]);
+			const [asking, setAsking] = React.useState(0);
+			const abortRef = React.useRef(null);
+			const listRef = React.useRef(null);
+			const inputRef = React.useRef(null);
+
+			React.useEffect(() => () => { try { abortRef.current?.abort(); } catch { /* ignore */ } }, []);
+			React.useEffect(() => { if (current.kbId && !kbId) setKbId(current.kbId); }, [current.kbId]);
+			React.useEffect(() => {
+				const el = listRef.current;
+				if (el) el.scrollTop = el.scrollHeight;
+			}, [items.length, openTurn]);
+			React.useEffect(() => { if (openTurn) inputRef.current?.focus(); }, [openTurn]);
+
+			const push = (item) => setItems((list) => [...list, item]);
+
+			function handleEvent(event, data) {
+				if (event === 'question' || event === 'probe') {
+					setAsking((n) => n + 1);
+					setOpenTurn({ turnId: data.turnId, kind: event, kpId: data.kpId, refs: data.refs || [] });
+					push({ kind: event, text: data.text, kpId: data.kpId, seq: data.seq, difficulty: data.difficulty, refs: data.refs || [] });
+					return;
+				}
+				if (event === 'grade') { push({ kind: 'grade', ...data }); return; }
+				if (event === 'board') { setBoard(data.mastery || []); return; }
+				if (event === 'report') { setReport(data); setStep('report'); return; }
+				if (event === 'error') { setError(data.message || '对练出错了'); return; }
+				// meta / stage / done 不单独渲染
+			}
+
+			/** SSE：读事件流，按事件类型推进界面。 */
+			async function openStream(sessionId) {
+				try { abortRef.current?.abort(); } catch { /* ignore */ }
+				const controller = new AbortController();
+				abortRef.current = controller;
+				try {
+					const response = await fetch(`${API}/exam/stream?id=${encodeURIComponent(sessionId)}`, {
+						headers: { 'x-kb-client': '1' },
+						signal: controller.signal,
+					});
+					if (!response.ok || !response.body) throw new Error(`事件流打不开（HTTP ${response.status}）`);
+					const reader = response.body.getReader();
+					const decoder = new TextDecoder();
+					let buffer = '';
+					for (;;) {
+						const { done, value } = await reader.read();
+						if (done) break;
+						buffer += decoder.decode(value, { stream: true });
+						let cut;
+						while ((cut = buffer.indexOf('\n\n')) >= 0) {
+							const chunk = buffer.slice(0, cut);
+							buffer = buffer.slice(cut + 2);
+							const eventLine = chunk.split('\n').find((line) => line.startsWith('event: '));
+							const dataLine = chunk.split('\n').find((line) => line.startsWith('data: '));
+							if (!eventLine) continue;
+							let data = {};
+							try { data = dataLine ? JSON.parse(dataLine.slice(6)) : {}; } catch { continue; }
+							handleEvent(eventLine.slice(7).trim(), data);
+						}
+					}
+				} catch (err) {
+					if (err?.name === 'AbortError') return;
+					setError(err.message || '事件流断开');
+				}
+			}
+
+			async function suggest() {
+				if (!kbId) { setError('先选一个知识库'); return; }
+				setError(''); setBusy('正在读这个库…');
+				try {
+					const data = await api('/exam/suggest', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ kbId }),
+					});
+					setObjectives(data.objectives || []);
+					setPicked(-1);
+					setObjective('');
+					setStep('objectives');
+				} catch (err) {
+					setError(err.message || '提议目标失败');
+				} finally { setBusy(''); }
+			}
+
+			async function beginExam() {
+				const text = (objective || '').trim();
+				if (!text) { setError('写一个学习目标，或选上面某一条'); return; }
+				setError(''); setBusy('正在拆解知识点…');
+				try {
+					const data = await api('/exam/start', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ kbId, objective: text }),
+					});
+					setPlan(data);
+					setStep('outline');
+				} catch (err) {
+					setError(err.message || '生成大纲失败');
+				} finally { setBusy(''); }
+			}
+
+			function startLive() {
+				if (!plan?.session) return;
+				setItems([]); setBoard([]); setReport(null); setError(''); setOpenTurn(null);
+				setStep('live');
+				openStream(plan.session.id);
+			}
+
+			async function submitAnswer() {
+				const text = answer.trim();
+				if (!openTurn || !text) return;
+				setAnswer('');
+				setError('');
+				try {
+					await api('/exam/answer', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ sessionId: plan.session.id, turnId: openTurn.turnId, answer: text }),
+					});
+					push({ kind: 'me', text });
+					setOpenTurn(null);
+				} catch (err) {
+					setError(err.message || '提交失败');
+					setAnswer(text);
+				}
+			}
+
+			async function finishNow() {
+				if (!plan?.session) return;
+				setBusy('正在出报告…');
+				try {
+					const data = await api('/exam/finish', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ sessionId: plan.session.id }),
+					});
+					setReport(data.report);
+					setStep('report');
+					try { abortRef.current?.abort(); } catch { /* ignore */ }
+				} catch (err) {
+					setError(err.message || '出报告失败');
+				} finally { setBusy(''); }
+			}
+
+			function restart() {
+				try { abortRef.current?.abort(); } catch { /* ignore */ }
+				setStep('setup'); setPlan(null); setItems([]); setReport(null);
+				setObjectives([]); setObjective(''); setPicked(-1); setOpenTurn(null); setBoard([]); setError('');
+			}
+
+			const kpTitle = (kpId) => {
+				const kp = plan?.outline?.find((item) => item.id === kpId);
+				return kp?.title || kpId || '';
+			};
+
+			const order = ['setup', 'objectives', 'outline', 'live', 'report'];
+			const stepsBar = h('div', { className: 'dsh-kb-examSteps' },
+				[['setup', '选库'], ['objectives', '定目标'], ['outline', '确认大纲'], ['live', '对练'], ['report', '报告']]
+					.map(([key, label], index) => h('span', {
+						key,
+						className: cx('dsh-kb-examStep',
+							step === key && 'dsh-kb-examStep--on',
+							order.indexOf(step) > index && 'dsh-kb-examStep--done'),
+					}, `${index + 1}. ${label}`)));
+
+			const errorBar = error
+				? h('div', { className: 'dsh-kb-banner dsh-kb-banner--bad' },
+					h('span', null, error),
+					h('button', { type: 'button', className: 'dsh-kb-bannerClose', onClick: () => setError('') },
+						h(Icon, { name: 'close', size: 12 })))
+				: null;
+
+			// ① 选库
+			if (step === 'setup') {
+				return h('div', { className: 'dsh-kb-exam' },
+					stepsBar,
+					errorBar,
+					h('div', { className: 'dsh-kb-examCard' },
+						h('p', { className: 'dsh-kb-examLead' }, '选一个知识库，我读一遍，给你三个学习目标。'),
+						h('label', { className: 'dsh-kb-examField' },
+							h('span', null, '知识库'),
+							h('select', {
+								className: 'dsh-kb-select',
+								value: kbId,
+								onChange: (event) => setKbId(event.target.value),
+							}, current.kbs.map((kb) => h('option', { key: kb.id, value: kb.id }, `${kb.name}（${kb.docs ?? 0} 篇）`)))),
+						h('p', { className: 'dsh-kb-hint' }, '暂时只支持单库对练。多库组合和冲突考点在后面的版本里。'),
+						h('div', { className: 'dsh-kb-examActions' },
+							h('button', {
+								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+								disabled: Boolean(busy) || !kbId,
+								onClick: suggest,
+							}, busy || '开始分析'))));
+			}
+
+			// ② 定目标
+			if (step === 'objectives') {
+				return h('div', { className: 'dsh-kb-exam' },
+					stepsBar,
+					errorBar,
+					h('div', { className: 'dsh-kb-examCard' },
+						h('p', { className: 'dsh-kb-examLead' }, '挑一个目标，或者自己改。目标写得越具体，判定越准。'),
+						objectives.map((item, index) => h('button', {
+							key: index,
+							type: 'button',
+							className: cx('dsh-kb-examObj', picked === index && 'dsh-kb-examObj--on'),
+							onClick: () => {
+								setPicked(index);
+								setObjective(item.text);
+							},
+						},
+							h('span', { className: 'dsh-kb-examObjText' }, item.text),
+							h('span', { className: 'dsh-kb-examObjMeta' },
+								`${item.coverage === 'high' ? '覆盖度高' : item.coverage === 'low' ? '覆盖度低' : '覆盖度中'}${item.why ? ` · ${item.why}` : ''}`))),
+						h('label', { className: 'dsh-kb-examField dsh-kb-examField--stack' },
+							h('span', null, '你的目标'),
+							h('textarea', {
+								className: 'dsh-kb-examTextarea',
+								rows: 3,
+								value: objective,
+								placeholder: '例：能根据症状区分玉米大斑病与丝黑穗病，并说出对应防治措施',
+								onChange: (event) => setObjective(event.target.value),
+							})),
+						h('div', { className: 'dsh-kb-examActions' },
+							h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => setStep('setup') }, '← 重选库'),
+							h('button', {
+								type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+								disabled: Boolean(busy) || !objective.trim(),
+								onClick: beginExam,
+							}, busy || '生成大纲'))));
+			}
+
+			// ③ 确认大纲
+			if (step === 'outline') {
+				const outline = plan?.outline ?? [];
+				const blueprint = plan?.blueprint ?? [];
+				return h('div', { className: 'dsh-kb-exam' },
+					stepsBar,
+					errorBar,
+					h('div', { className: 'dsh-kb-examCard' },
+						h('p', { className: 'dsh-kb-examLead' }, `目标：${plan?.session?.objective ?? ''}`),
+						h('div', { className: 'dsh-kb-examKpList' },
+							outline.map((kp) => {
+								const item = blueprint.find((entry) => entry.kpId === kp.id);
+								return h('div', { key: kp.id, className: 'dsh-kb-examKp' },
+									h('span', { className: 'dsh-kb-examKpTitle' }, kp.title),
+									h('span', { className: 'dsh-kb-examKpMeta' }, `${item?.turns ?? 2} 题 · ${item?.difficulty ?? 'discern'}`));
+							})),
+						h('p', { className: 'dsh-kb-hint' }, '对练会按这个顺序问，每题答完立刻给反馈，答对了会追一层。'),
+						h('div', { className: 'dsh-kb-examActions' },
+							h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => setStep('objectives') }, '← 改目标'),
+							h('button', { type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary', onClick: startLive }, '开始对练'))));
+			}
+
+			// ④ 对练
+			if (step === 'live') {
+				return h('div', { className: 'dsh-kb-exam dsh-kb-exam--live' },
+					stepsBar,
+					errorBar,
+					h('div', { className: 'dsh-kb-examTop' },
+						h('span', { className: 'dsh-kb-examProgress' },
+							`第 ${asking} 题${openTurn ? ` · 当前知识点：${kpTitle(openTurn.kpId)}` : ' · 正在出题…'}`),
+						h('span', { className: 'dsh-kb-viewerGrow' }),
+						board.slice(0, 3).map((item) => h('span', {
+							key: item.kpId,
+							className: 'dsh-kb-examScore',
+							title: kpTitle(item.kpId),
+						}, `${kpTitle(item.kpId).slice(0, 6)} ${Math.round(item.score)}`)),
+						h('button', { type: 'button', className: 'dsh-kb-btn', disabled: Boolean(busy), onClick: finishNow },
+							busy || '结束并出报告')),
+					h('div', { className: 'dsh-kb-examList', ref: listRef },
+						items.length === 0 ? h('div', { className: 'dsh-kb-hint' }, '正在读片段、出第一题…') : null,
+						items.map((item, index) => {
+							if (item.kind === 'question' || item.kind === 'probe') {
+								return h('div', { key: index, className: 'dsh-kb-msg dsh-kb-msg--ai' },
+									item.kind === 'probe' ? h('span', { className: 'dsh-kb-msgTag' }, '追问') : null,
+									h('div', null, item.text),
+									item.refs?.length
+										? h('div', { className: 'dsh-kb-msgRefs' },
+											item.refs.map((ref, i) => h('span', { key: i, className: 'dsh-kb-msgRef' },
+												`《${ref.name}》${ref.page ? ` P${ref.page}` : ''}`)))
+										: null);
+							}
+							if (item.kind === 'me') {
+								return h('div', { key: index, className: 'dsh-kb-msg dsh-kb-msg--me' }, h('div', null, item.text));
+							}
+							const tone = item.verdict === 'full' ? 'ok' : item.verdict === 'partial' ? 'mid' : 'bad';
+							return h('div', { key: index, className: cx('dsh-kb-msg dsh-kb-msg--grade', `dsh-kb-msg--${tone}`) },
+								h('div', { className: 'dsh-kb-msgGradeHead' },
+									h('span', null, `${item.score ?? 0}/2`),
+									h('span', null, item.verdict === 'full' ? '答对了' : item.verdict === 'partial' ? '部分正确' : '答错了')),
+								item.comment ? h('div', null, item.comment) : null,
+								item.missing?.length ? h('div', { className: 'dsh-kb-msgMissing' }, `缺：${item.missing.join('、')}`) : null);
+						})),
+					h('div', { className: 'dsh-kb-examInput' },
+						h('textarea', {
+							ref: inputRef,
+							className: 'dsh-kb-examTextarea dsh-kb-examTextarea--answer',
+							rows: 2,
+							value: answer,
+							disabled: !openTurn,
+							placeholder: openTurn ? '用自己的话回答，Ctrl+Enter 提交' : '等下一题…',
+							onChange: (event) => setAnswer(event.target.value),
+							onKeyDown: (event) => {
+								if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+									event.preventDefault();
+									submitAnswer();
+								}
+							},
+						}),
+						h('button', {
+							type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary',
+							disabled: !openTurn || !answer.trim(),
+							onClick: submitAnswer,
+						}, '提交')));
+			}
+
+			// ⑤ 报告
+			const verdictTone = report?.verdict === 'pass' ? 'ok' : report?.verdict === 'near' ? 'mid' : 'bad';
+			return h('div', { className: 'dsh-kb-exam' },
+				stepsBar,
+				h('div', { className: 'dsh-kb-examCard' },
+					h('div', { className: cx('dsh-kb-examVerdict', `dsh-kb-examVerdict--${verdictTone}`) },
+						h('strong', null, report?.label ?? '—'),
+						h('span', null, `平均覆盖 ${report?.avgCoverage ?? 0} · 共 ${report?.turns ?? 0} 题`)),
+					(report?.kps ?? []).map((kp) => h('div', { key: kp.kpId, className: 'dsh-kb-examBar' },
+						h('span', { className: 'dsh-kb-examBarTitle' }, kp.title),
+						h('span', { className: 'dsh-kb-examBarTrack' },
+							h('span', {
+								className: cx('dsh-kb-examBarFill', kp.score >= 80 ? 'dsh-kb-examBarFill--ok' : kp.score >= 60 ? 'dsh-kb-examBarFill--mid' : 'dsh-kb-examBarFill--bad'),
+								style: { width: `${Math.max(4, Math.min(100, kp.score))}%` },
+							})),
+						h('span', { className: 'dsh-kb-examBarScore' }, `${kp.score} · ${kp.label}`))),
+					report?.weak?.length
+						? h('div', { className: 'dsh-kb-examWeak' },
+							h('div', { className: 'dsh-kb-examWeakTitle' }, '该补的地方'),
+							report.weak.map((item) => h('div', { key: item.kpId, className: 'dsh-kb-examWeakRow' },
+								h('strong', null, item.title),
+								h('span', null, item.missing?.length ? `缺：${item.missing.join('、')}` : '得分偏低'))))
+						: null,
+					report?.unsupported?.length
+						? h('p', { className: 'dsh-kb-hint' }, `这些知识点库里没有足够内容，没给分：${report.unsupported.join('、')}`)
+						: null,
+					h('div', { className: 'dsh-kb-examActions' },
+						h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => setStep('objectives') }, '换个目标再练'),
+						h('button', { type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary', onClick: restart }, '重新开始'))));
+		}
+
 		function currentFolderId(current) {
 			const selected = current.selectedId
 				? current.nodes.find((node) => node.id === current.selectedId)
@@ -1237,13 +1603,18 @@ window.__ModuleLoader__.load({
 						h('button', {
 							type: 'button',
 							className: cx('dsh-kb-segBtn', !current.dashOpen && !current.showSettings && 'dsh-kb-segBtn--on'),
-							onClick: () => patch({ dashOpen: false, showSettings: false }),
+							onClick: () => patch({ dashOpen: false, showSettings: false, examOpen: false }),
 						}, '文档'),
 						h('button', {
 							type: 'button',
 							className: cx('dsh-kb-segBtn', current.dashOpen && !current.showSettings && 'dsh-kb-segBtn--on'),
-							onClick: () => patch({ dashOpen: true, showSettings: false }),
-						}, '看板')),
+							onClick: () => patch({ dashOpen: true, showSettings: false, examOpen: false }),
+						}, '看板'),
+						h('button', {
+							type: 'button',
+							className: cx('dsh-kb-segBtn', current.examOpen && !current.showSettings && 'dsh-kb-segBtn--on'),
+							onClick: () => patch({ dashOpen: false, showSettings: false, examOpen: true }),
+						}, '对练')),
 					h('button', {
 						type: 'button', className: 'dsh-kb-btn',
 						onClick: () => {
@@ -1315,7 +1686,9 @@ window.__ModuleLoader__.load({
 							h(SettingsSection))
 						: current.dashOpen
 							? h(Dashboard)
-							: (current.view === 'search' && current.query ? h(SearchView) : h(DocView, { onAsk, onReindex, onDelete }))),
+							: current.examOpen
+								? h(Exam)
+								: (current.view === 'search' && current.query ? h(SearchView) : h(DocView, { onAsk, onReindex, onDelete }))),
 			),
 			h(Dialog),
 			// 行操作菜单：fixed 定位，免得被树栏的滚动裁掉
@@ -1947,6 +2320,58 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-modalInput{height:30px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:12.5px;}',
 				'.dsh-kb-modalInput:focus{outline:none;border-color:var(--dsw-alias-label-brand,#1f6feb);}',
 				'.dsh-kb-modalActions{display:flex;justify-content:flex-end;gap:8px;}',
+				'.dsh-kb-exam{display:flex;flex-direction:column;gap:12px;padding:16px;height:100%;min-height:0;overflow:auto;box-sizing:border-box;}',
+				'.dsh-kb-examSteps{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examStep{padding:2px 9px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-examStep--on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-examStep--done{color:var(--dsw-alias-label-brand,#1f6feb);border-color:currentColor;}',
+				'.dsh-kb-examCard{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);}',
+				'.dsh-kb-examLead{margin:0;font-size:13px;line-height:1.6;}',
+				'.dsh-kb-examField{display:flex;align-items:center;gap:8px;font-size:12.5px;}',
+				'.dsh-kb-examField--stack{flex-direction:column;align-items:stretch;gap:6px;}',
+				'.dsh-kb-examTextarea{width:100%;box-sizing:border-box;padding:8px 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;font-size:12.5px;line-height:1.6;resize:vertical;}',
+				'.dsh-kb-examTextarea:focus{outline:none;border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-examActions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}',
+				'.dsh-kb-examObj{display:flex;flex-direction:column;gap:3px;padding:10px;text-align:left;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:inherit;font:inherit;cursor:pointer;}',
+				'.dsh-kb-examObj:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);}',
+				'.dsh-kb-examObj--on{border-color:var(--dsw-alias-label-brand,#1f6feb);background:var(--dsw-alias-bg-layer-1);}',
+				'.dsh-kb-examObjText{font-size:12.5px;line-height:1.6;}',
+				'.dsh-kb-examObjMeta{font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examKpList{display:flex;flex-direction:column;gap:7px;}',
+				'.dsh-kb-examKp{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;}',
+				'.dsh-kb-examKpMeta{color:var(--dsw-alias-label-secondary);font-size:11.5px;white-space:nowrap;}',
+				'.dsh-kb-exam--live{padding:12px 16px;}',
+				'.dsh-kb-examTop{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary);flex-wrap:wrap;}',
+				'.dsh-kb-examScore{padding:1px 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);font-size:11.5px;}',
+				'.dsh-kb-examList{flex:1;min-height:140px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}',
+				'.dsh-kb-msg{max-width:86%;padding:8px 10px;border-radius:10px;font-size:12.5px;line-height:1.65;border:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-msg--ai{background:var(--dsw-alias-bg-layer-2);}',
+				'.dsh-kb-msg--me{align-self:flex-end;background:var(--dsw-alias-bg-layer-1);}',
+				'.dsh-kb-msg--ok{border-color:#2da44e;}',
+				'.dsh-kb-msg--mid{border-color:#bf8700;}',
+				'.dsh-kb-msg--bad{border-color:#cf222e;}',
+				'.dsh-kb-msgTag{margin-right:6px;padding:0 5px;border-radius:6px;background:var(--dsw-alias-bg-layer-1);font-size:11px;}',
+				'.dsh-kb-msgRefs{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}',
+				'.dsh-kb-msgRef{font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-msgGradeHead{display:flex;gap:8px;font-size:12px;font-weight:600;}',
+				'.dsh-kb-msgMissing{margin-top:3px;font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-examInput{display:flex;gap:8px;align-items:flex-end;}',
+				'.dsh-kb-examTextarea--answer{flex:1;}',
+				'.dsh-kb-examVerdict{display:flex;align-items:baseline;gap:8px;padding:9px 11px;border-radius:10px;background:var(--dsw-alias-bg-layer-2);font-size:12px;}',
+				'.dsh-kb-examVerdict strong{font-size:16px;}',
+				'.dsh-kb-examVerdict--ok strong{color:#2da44e;}',
+				'.dsh-kb-examVerdict--mid strong{color:#bf8700;}',
+				'.dsh-kb-examVerdict--bad strong{color:#cf222e;}',
+				'.dsh-kb-examBar{display:flex;align-items:center;gap:8px;font-size:12.5px;}',
+				'.dsh-kb-examBarTitle{width:130px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+				'.dsh-kb-examBarTrack{flex:1;height:6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;}',
+				'.dsh-kb-examBarFill{display:block;height:100%;border-radius:999px;background:#2da44e;}',
+				'.dsh-kb-examBarFill--mid{background:#bf8700;}',
+				'.dsh-kb-examBarFill--bad{background:#cf222e;}',
+				'.dsh-kb-examBarScore{width:100px;flex:none;text-align:right;color:var(--dsw-alias-label-secondary);font-size:11.5px;}',
+				'.dsh-kb-examWeak{display:flex;flex-direction:column;gap:5px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-examWeakTitle{font-size:12px;font-weight:600;}',
+				'.dsh-kb-examWeakRow{display:flex;gap:8px;font-size:12px;color:var(--dsw-alias-label-secondary);}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
