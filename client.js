@@ -1171,9 +1171,6 @@ window.__ModuleLoader__.load({
 			const [error, setError] = React.useState('');
 			const [notice, setNotice] = React.useState('');
 			// 对练记录：runsFor = 展开的是哪个主题；openedRun = 正在看的那一次
-			const [recordFor, setRecordFor] = React.useState(null);
-	const [sideWidth, setSideWidth] = React.useState(356);
-	const [sideCollapsed, setSideCollapsed] = React.useState(false);
 			const [runs, setRuns] = React.useState([]);
 			const [openedRun, setOpenedRun] = React.useState(null);
 
@@ -1385,29 +1382,18 @@ window.__ModuleLoader__.load({
 
 				// 右列只在点了「对练记录」之后才存在，默认不占位、不空着
 				const rightColumn = !recordFor ? null : h('div', {
-					className: cx('dsh-kb-examSide', sideCollapsed && 'dsh-kb-examSide--collapsed'),
-					style: { width: `${sideCollapsed ? 46 : sideWidth}px` },
+					className: 'dsh-kb-examSide',
+					style: { width: `${sideWidth}px` },
 				},
 					h('div', { className: 'dsh-kb-examSideHandle', onMouseDown: startResize, title: '拖动调宽' }),
-					sideCollapsed
-						? h('button', {
-							type: 'button', className: 'dsh-kb-examSideRail',
-							onClick: () => setSideCollapsed(false),
-							title: '展开对练记录',
-						}, h(Icon, { name: 'chevron', size: 13, className: 'dsh-kb-rot180' }), h('span', null, `${runs.length} 次`))
-						: h('div', { className: 'dsh-kb-examSideInner' },
+						h('div', { className: 'dsh-kb-examSideInner' },
 							h('div', { className: 'dsh-kb-examSideHead' },
 								h('div', { className: 'dsh-kb-examTitle' }, '对练记录'),
 								h('span', { className: 'dsh-kb-examScopeLabel' }, `${runs.length} 次`),
 								h('span', { className: 'dsh-kb-viewerGrow' }),
 								h('button', {
 									type: 'button', className: 'dsh-kb-examMini',
-									onClick: () => setSideCollapsed(true),
-									title: '收起',
-								}, '收起'),
-								h('button', {
-									type: 'button', className: 'dsh-kb-examMini',
-									onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); setSideCollapsed(false); },
+									onClick: () => { setRecordFor(null); setRuns([]); setOpenedRun(null); },
 									title: '关闭',
 								}, h(Icon, { name: 'close', size: 12 }))),
 							h('p', { className: 'dsh-kb-examSideTopic' }, recordFor.objective),
@@ -2435,8 +2421,6 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examSideHead{display:flex;align-items:center;gap:8px;}',
 				'.dsh-kb-examSideTopic{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.5;margin:0;}',
 				'.dsh-kb-examMini--on{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-brand,#1f6feb);}',
-				'.dsh-kb-examSideRail{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 2px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;cursor:pointer;writing-mode:vertical-rl;}',
-				'.dsh-kb-examSideRail:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-primary);}',
 				'.dsh-kb-runEmpty{display:flex;flex-direction:column;gap:4px;}',
 				'.dsh-kb-runEmpty .dsh-kb-hint{margin:0;}',
 				'.dsh-kb-exam--split{flex-direction:row;align-items:stretch;gap:14px;overflow:hidden;}',
@@ -2445,7 +2429,6 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-examSideInner{display:flex;flex-direction:column;gap:8px;min-height:0;}',
 				'.dsh-kb-examSideHandle{position:absolute;left:-6px;top:8px;bottom:8px;width:10px;cursor:col-resize;}',
 				'.dsh-kb-examSideHandle:hover{background:linear-gradient(90deg,transparent,rgba(127,127,127,.28));}',
-				'.dsh-kb-examSide--collapsed{align-items:center;padding:8px 6px;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
