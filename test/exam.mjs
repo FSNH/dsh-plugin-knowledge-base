@@ -309,6 +309,35 @@ console.log('\n[8] 学习主题：对话设计 + 落库');
 	const listed = await listTool.execute({});
 	check('工具能列出主题', listed.topics.length >= 2, String(listed.topics.length));
 
+	// 题量：默认 10，可自定义
+	const defaultTopic = exam.saveTopic({
+		kbId,
+		docIds: [],
+		objective: '默认题量的主题',
+		outline: [{ id: 'kp1', title: '甲', docIds: [] }],
+		blueprint: [{ kpId: 'kp1', turns: 10, difficulty: 'discern' }],
+	});
+	check('不传题量时默认 10', defaultTopic.totalTurns === 10, String(defaultTopic.totalTurns));
+	check('考官 prompt 用主题的题数', exam.topicPrompt(defaultTopic.id).prompt.includes('总共 10 题'));
+
+	const custom = exam.saveTopic({
+		kbId,
+		docIds: [],
+		objective: '自定义题量的主题',
+		outline: [{ id: 'kp1', title: '乙', docIds: [] }],
+		blueprint: [{ kpId: 'kp1', turns: 4, difficulty: 'apply' }],
+		totalTurns: 6,
+	});
+	check('可以自定义题量', custom.totalTurns === 6, String(custom.totalTurns));
+	check('考官 prompt 跟着变', exam.topicPrompt(custom.id).prompt.includes('总共 6 题'));
+
+	const clamped = exam.saveTopic({
+		kbId, docIds: [], objective: '越界题量',
+		outline: [{ id: 'kp1', title: '丙', docIds: [] }],
+		blueprint: [], totalTurns: 999,
+	});
+	check('题量有上限', clamped.totalTurns === 30, String(clamped.totalTurns));
+
 	check('删掉一个', exam.deleteTopic(saved.id).removed === 1);
 }
 

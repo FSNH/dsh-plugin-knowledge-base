@@ -1331,7 +1331,7 @@ window.__ModuleLoader__.load({
 										title: '删除这个学习主题（不动文档）',
 									}, '删除')),
 								h('div', { className: 'dsh-kb-topicMeta' },
-									`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${when(topic.createdAt)}`),
+									`${topic.kbName || '知识库'} · ${topic.docIds.length || '整库'} 篇 · ${topic.outline.length} 个知识点 · ${topic.totalTurns || 10} 题 · ${when(topic.createdAt)}`),
 								h('div', { className: 'dsh-kb-topicKps' },
 									topic.outline.map((kp, index) => h('span', { key: kp.id ?? index, className: 'dsh-kb-topicKp' },
 										`${index + 1}. ${kp.title}`))),
@@ -1368,7 +1368,7 @@ window.__ModuleLoader__.load({
 										h('span', { className: 'dsh-kb-examPickName' }, doc.name),
 										h('span', { className: 'dsh-kb-examPickMeta' }, doc.chars ? size(doc.chars) : '—')))),
 					h('p', { className: 'dsh-kb-hint dsh-kb-examNote' },
-						'下一步不在面板里做：会打开一个会话，AI 自己读这些文档，和你把学习目标与大纲谈定、写回知识库；'
+						'下一步不在面板里做：会打开一个会话，AI 自己读这些文档，和你把学习目标与大纲谈定（题量默认 10 题，可以在对话里改）、写回知识库；'
 						+ '存好后它可以直接在同一个会话里开练，也可以之后回这里点卡片上的「开始 AI 对练」。'),
 					modelLine,
 					h('div', { className: 'dsh-kb-examFoot' },
