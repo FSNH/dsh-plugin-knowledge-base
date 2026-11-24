@@ -1173,8 +1173,9 @@ window.__ModuleLoader__.load({
 			// 对练记录：runsFor = 展开的是哪个主题；openedRun = 正在看的那一次
 			const [runs, setRuns] = React.useState([]);
 			const [openedRun, setOpenedRun] = React.useState(null);
+			const [openItems, setOpenItems] = React.useState([]);
 			const [recordFor, setRecordFor] = React.useState(null);
-			const [sideWidth, setSideWidth] = React.useState(356);
+			const [sideWidth, setSideWidth] = React.useState(430);
 			const [detailFor, setDetailFor] = React.useState('');
 			// 标题悬浮提示（原生 title 太慢、样式不跟主题，自己做一个）
 			const [tip, setTip] = React.useState(null);
@@ -1262,7 +1263,7 @@ window.__ModuleLoader__.load({
 			function startResize(event) {
 				event.preventDefault();
 				const onMove = (moveEvent) => {
-					const next = Math.max(260, Math.min(640, window.innerWidth - moveEvent.clientX - 16));
+					const next = Math.max(320, Math.min(760, window.innerWidth - moveEvent.clientX - 16));
 					setSideWidth(next);
 				};
 				const onUp = () => {
@@ -1335,18 +1336,37 @@ window.__ModuleLoader__.load({
 			if (view === 'list') {
 				const list = topics ?? [];
 
+				// 一次对练的逐题：题干独占一行，回答/点评默认收起，分数用颜色区分
+				const scoreTone = (score) => {
+					if (score == null) return '';
+					if (score >= 80) return 'dsh-kb-runScore--good';
+					if (score >= 60) return 'dsh-kb-runScore--mid';
+					return 'dsh-kb-runScore--bad';
+				};
 				const runDetail = (run) => {
 					if (openedRun?.id !== run.id || !openedRun.items?.length) return null;
 					return h('div', { className: 'dsh-kb-runBody' },
-						openedRun.items.map((item) => h('div', { key: item.id, className: 'dsh-kb-runItem' },
-							h('div', { className: 'dsh-kb-runQ' },
-								h('span', { className: 'dsh-kb-runNo' }, `Q${item.seq}`),
-								item.kpTitle ? h('span', { className: 'dsh-kb-runKp' }, item.kpTitle) : null,
-								h('span', null, item.question)),
-							item.answer ? h('div', { className: 'dsh-kb-runA' }, `答：${item.answer}`) : null,
-							h('div', { className: 'dsh-kb-runG' },
-								item.score != null ? h('span', { className: 'dsh-kb-runScore' }, `${item.score} 分`) : null,
-								item.comment ? h('span', null, item.comment) : null))));
+						openedRun.items.map((item) => {
+							const open = openItems.includes(item.id);
+							const hasMore = Boolean(item.answer || item.comment);
+							return h('div', { key: item.id, className: 'dsh-kb-runItem' },
+								h('div', { className: 'dsh-kb-runHeadRow' },
+									h('span', { className: 'dsh-kb-runNo' }, `Q${item.seq}`),
+									item.kpTitle ? h('span', { className: 'dsh-kb-runKp' }, item.kpTitle) : null,
+									item.score != null
+										? h('span', { className: cx('dsh-kb-runScore', scoreTone(item.score)) }, `${item.score} 分`)
+										: null,
+									h('span', { className: 'dsh-kb-viewerGrow' }),
+									hasMore
+										? h('button', {
+											type: 'button', className: 'dsh-kb-runToggle',
+											onClick: () => setOpenItems((list) => (open ? list.filter((id) => id !== item.id) : list.concat(item.id))),
+										}, open ? '收起' : '看回答')
+										: null),
+								h('div', { className: 'dsh-kb-runQ' }, item.question),
+								open && item.answer ? h('div', { className: 'dsh-kb-runA' }, item.answer) : null,
+								open && item.comment ? h('div', { className: 'dsh-kb-runC' }, item.comment) : null);
+						}));
 				};
 
 				// 卡片统一高度：默认只显示 2 行标题 + 一行元信息，大纲等细节收进「详情」
@@ -2459,14 +2479,6 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-runHead--on{border-color:var(--dsw-alias-label-brand,#1f6feb);background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-runTime{color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-runMeta{margin-left:auto;color:var(--dsw-alias-label-secondary);font-size:11.5px;}',
-				'.dsh-kb-runBody{display:flex;flex-direction:column;gap:6px;padding:6px 8px 2px;}',
-				'.dsh-kb-runItem{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-bottom:1px solid var(--dsw-alias-border-l1);}',
-				'.dsh-kb-runQ{display:flex;gap:6px;font-size:12.5px;line-height:1.6;}',
-				'.dsh-kb-runNo{flex:none;color:var(--dsw-alias-label-secondary);font-size:11.5px;}',
-				'.dsh-kb-runKp{flex:none;padding:0 6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);font-size:11px;color:var(--dsw-alias-label-secondary);}',
-				'.dsh-kb-runA{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.6;}',
-				'.dsh-kb-runG{display:flex;gap:8px;font-size:11.5px;color:var(--dsw-alias-label-secondary);}',
-				'.dsh-kb-runScore{flex:none;font-weight:600;color:var(--dsw-alias-label-primary);}',
 				'.dsh-kb-examSideHead{display:flex;align-items:center;gap:8px;}',
 				'.dsh-kb-examSideTopic{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.5;margin:0;}',
 				'.dsh-kb-examMini--on{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-brand,#1f6feb);}',
@@ -2481,6 +2493,21 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-topic{display:flex;flex-direction:column;min-height:132px;box-sizing:border-box;}',
 				'.dsh-kb-topicFoot{margin-top:auto;padding-top:8px;}',
 				'.dsh-kb-tip{position:fixed;z-index:80;max-width:440px;padding:8px 11px;border-radius:9px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);font-size:12.5px;line-height:1.65;box-shadow:0 8px 28px rgba(0,0,0,.28);pointer-events:none;white-space:normal;word-break:break-word;}',
+				'.dsh-kb-runBody{display:flex;flex-direction:column;gap:2px;padding:4px 0 2px;}',
+				'.dsh-kb-runItem{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--dsw-alias-border-l1);}',
+				'.dsh-kb-runItem:last-child{border-bottom:none;}',
+				'.dsh-kb-runHeadRow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}',
+				'.dsh-kb-runNo{flex:none;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-runKp{flex:none;padding:1px 7px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);font-size:11px;color:var(--dsw-alias-label-secondary);}',
+				'.dsh-kb-runScore{flex:none;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;}',
+				'.dsh-kb-runScore--good{background:rgba(35,134,54,.16);color:#2da44e;}',
+				'.dsh-kb-runScore--mid{background:rgba(212,167,44,.18);color:#bf8700;}',
+				'.dsh-kb-runScore--bad{background:rgba(207,34,46,.14);color:#cf222e;}',
+				'.dsh-kb-runToggle{flex:none;padding:1px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;cursor:pointer;}',
+				'.dsh-kb-runToggle:hover{border-color:var(--dsw-alias-label-brand,#1f6feb);color:var(--dsw-alias-label-primary);}',
+				'.dsh-kb-runQ{font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-primary);white-space:pre-wrap;word-break:break-word;}',
+				'.dsh-kb-runA{font-size:12px;line-height:1.7;color:var(--dsw-alias-label-secondary);padding:8px 10px;border-radius:8px;background:var(--dsw-alias-bg-layer-2);white-space:pre-wrap;word-break:break-word;}',
+				'.dsh-kb-runC{font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;word-break:break-word;}',
 			].join('\n');
 			document.head.appendChild(style);
 			return () => style.remove();
