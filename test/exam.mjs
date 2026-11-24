@@ -133,6 +133,24 @@ console.log('\n[2] 保存 / 读取 / 删除');
 	check('删除返回条数', exam.deleteTopic(topic.id).removed === 1);
 	check('删完查不到', exam.getTopic(topic.id) === null);
 
+	// 删主题的范围：记录、逐题、题库都清掉；文档和知识库不动
+	const scoped = exam.saveTopic({
+		kbId, docIds: ['d_a'], objective: '删除范围用例',
+		outline: [{ id: 'kp1', title: '甲' }], blueprint: [], totalTurns: 4,
+	});
+	const run = exam.startRun({ topicId: scoped.id });
+	exam.logTurn({ runId: run.runId, question: '题？', answer: '答', score: 60, verdict: 'partial' });
+	exam.saveQuizItem({ topicId: scoped.id, stem: '题库里的题？', options: ['A. 甲', 'B. 乙'], answer: 'A' });
+
+	const docsBefore = store.listNodes(kbId).filter((node) => node.kind === 'doc').length;
+	const result = exam.deleteTopic(scoped.id);
+	check('删除返回各表条数', result.runs === 1 && result.qa === 1 && result.quiz === 1, JSON.stringify(result));
+	check('对练记录没了', exam.listRuns(scoped.id, 10).length === 0);
+	check('逐题记录没了', exam.getRun(run.runId) === null);
+	check('题库题目没了', exam.listQuizItems(scoped.id).length === 0);
+	check('文档一篇没少', store.listNodes(kbId).filter((node) => node.kind === 'doc').length === docsBefore);
+	check('知识库还在', Boolean(store.getKb(kbId)));
+
 	const emptyOutline = (() => {
 		try { exam.saveTopic({ kbId, docIds: [], objective: '空大纲', outline: [], blueprint: [] }); return false; } catch { return true; }
 	})();

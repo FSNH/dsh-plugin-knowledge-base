@@ -1375,7 +1375,7 @@ window.__ModuleLoader__.load({
 					}
 				};
 				if (typeof askConfirm === 'function') {
-					askConfirm(`删除学习主题「${String(topic.objective).slice(0, 20)}…」？只删卡片，不动文档。`, doDelete);
+					askConfirm(`删除学习主题「${String(topic.objective).slice(0, 20)}…」？会一并删除这个主题的对练记录、逐题记录和题库题目；知识库里的文档不受影响。`, doDelete);
 					return;
 				}
 				await doDelete();
