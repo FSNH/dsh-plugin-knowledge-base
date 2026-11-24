@@ -277,6 +277,8 @@ console.log('\n[7] 刷题模式：出题 prompt + 题库');
 	check('quiz 带 mode 标记', quiz.mode === 'quiz');
 	check('quiz 用点选开始', quiz.prompt.includes('ask_user_question'));
 	check('quiz 说明不要打字回开始', quiz.prompt.includes('不要让我打字'));
+	check('quiz 要求每个选项单独一行', quiz.prompt.includes('每个选项单独一行'));
+	check('quiz 用 ask_user_question 收答案', quiz.prompt.includes('option 的 label 只写字母'));
 
 	const one = exam.saveQuizItem({
 		topicId: topic.id,
