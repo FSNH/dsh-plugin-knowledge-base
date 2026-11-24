@@ -1115,7 +1115,7 @@ window.__ModuleLoader__.load({
 					h('section', { className: 'dsh-kb-card' },
 						h('h4', null, '最近 7 天检索'),
 						(data.trend || []).length === 0
-							? h('p', { className: 'dsh-kb-hint' }, '还没有检索记录（搜索框或 kb_search 都会记）')
+							? h('p', { className: 'dsh-kb-hint' }, '还没有检索记录（搜索框或 AI 检索都会记）')
 							: h('div', { className: 'dsh-kb-spark' },
 								(data.trend || []).map((item) => h('div', { className: 'dsh-kb-sparkCol', key: item.day, title: `${item.day}：${item.count} 次` },
 									h('div', { className: 'dsh-kb-sparkBar', style: { height: `${Math.max(4, Math.round((item.count / maxTrend) * 100))}%` } }),
@@ -1341,7 +1341,7 @@ window.__ModuleLoader__.load({
 						return;
 					}
 					sessionStarter(data.prompt);
-					setNotice('已把考官 prompt 放进会话输入框，按回车开始');
+					setNotice('已打开会话，题目已经放在输入框里，按回车开始');
 				} catch (err) {
 					setError(friendly(err));
 				}
@@ -1515,7 +1515,7 @@ window.__ModuleLoader__.load({
 				const quizBody = quizItems.length === 0
 					? h('div', { className: 'dsh-kb-runEmpty' },
 						h('p', { className: 'dsh-kb-hint' }, '这个主题还没有刷过题。'),
-						h('p', { className: 'dsh-kb-hint' }, '点卡片上的「刷题」，AI 每判完一题会调用 kb_quiz_save 存进这里。'))
+						h('p', { className: 'dsh-kb-hint' }, '点卡片上的「刷题」开始，答过的题会自动收进这里。'))
 					: h('div', { className: 'dsh-kb-quizList' },
 						quizItems.map((item) => h('div', { key: item.id, className: 'dsh-kb-quizItem' },
 							h('div', { className: 'dsh-kb-quizHead' },
@@ -1561,8 +1561,8 @@ window.__ModuleLoader__.load({
 							: runs.length === 0
 								? h('div', { className: 'dsh-kb-runEmpty' },
 									h('p', { className: 'dsh-kb-hint' }, '这个主题还没有对练记录。'),
-									h('p', { className: 'dsh-kb-hint' }, '点「AI 对练」或「刷题」，每答完一题 AI 会记下来；'),
-									h('p', { className: 'dsh-kb-hint' }, '如果刚练过却没有记录，多半是会话里没调那个工具。'))
+									h('p', { className: 'dsh-kb-hint' }, '点「AI 对练」或「刷题」开始，每答完一题都会记下来。'),
+									h('p', { className: 'dsh-kb-hint' }, '如果刚练过却是空的，点右上角「刷新」再看一次。'))
 								: h('div', { className: 'dsh-kb-runList' },
 									runs.map((run) => h('div', { key: run.id, className: 'dsh-kb-run' },
 										h('button', {
