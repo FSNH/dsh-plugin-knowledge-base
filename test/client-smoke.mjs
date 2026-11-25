@@ -534,6 +534,48 @@ console.log('\n[9] 对练面板');
 		internals.patch({ sheet: null, doc: null });
 	}
 
+	console.log('\n[9.6] Markdown 渲染');
+	{
+		const md = [
+			'# 一级标题',
+			'',
+			'**汇报人：** 张三',
+			'',
+			'- 第一条',
+			'- 第二条',
+			'',
+			'> 引用一句话',
+			'',
+			'---',
+			'',
+			'| 列1 | 列2 |',
+			'| --- | --- |',
+			'| 2026-11-02 | 33 |',
+		].join('\n');
+		const nodes = internals.renderMarkdown(md, '');
+		const flat = [];
+		const walk = (list) => {
+			for (const node of list || []) {
+				if (!node || typeof node !== 'object') continue;
+				flat.push(node);
+				if (node.props && node.props.children) {
+					const kids = Array.isArray(node.props.children) ? node.props.children : [node.props.children];
+					walk(kids.filter((kid) => kid && typeof kid === 'object'));
+				}
+			}
+		};
+		walk(nodes);
+		check('标题渲染成 h1', flat.some((node) => String(node.props?.className || '').includes('dsh-kb-h1')));
+		check('**粗体** 渲染成 strong', flat.some((node) => node.type === 'strong'));
+		check('不再有字面的星号', !JSON.stringify(nodes, (key, value) => (typeof value === 'string' ? value : value)).includes('**'));
+		check('列表渲染成 ul/li', flat.some((node) => node.type === 'ul') && flat.some((node) => node.type === 'li'));
+		check('引用渲染成 blockquote', flat.some((node) => node.type === 'blockquote'));
+		check('--- 渲染成 hr', flat.some((node) => node.type === 'hr'));
+		check('表格渲染成 table 且跳过 |---|', flat.some((node) => node.type === 'table' && String(node.props?.className || '').includes('dsh-kb-mdTbl')));
+		check('表头是「列1」', flat.some((node) => node.type === 'th' && String(node.props?.children) === '列1'));
+		check('单元格没被吃掉', flat.some((node) => node.type === 'td' && String(node.props?.children) === '2026-11-02'));
+	}
+
 console.log('\n[10] 卸载清理');
 try {
 	for (const dispose of disposers) dispose();

@@ -560,8 +560,10 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 			});
 		}
 
-		// ── 正文渲染（很轻的 markdown-ish）──────────────────────────────────
-		function renderText(text, query) {
+		// ── 正文渲染：轻量 Markdown（标题 / 列表 / 引用 / 分隔线 / 代码块 / 表格 / 行内格式）──
+		// 注意：只做「看得懂」的程度，不做完整 CommonMark——正文是抽取出来的文本，
+		// 过度解析反而会把正文里的 * 和 # 吃掉。
+		function renderMarkdown(text, query) {
 			const lines = String(text || '').split('\n');
 			const out = [];
 			const words = String(query || '').trim().split(/\s+/).filter((word) => word.length >= 1);
@@ -574,42 +576,144 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 					.filter(Boolean)
 					.join('|');
 				if (!pattern) return value;
-				const parts = value.split(new RegExp(`(${pattern})`, 'gi'));
+				const parts = String(value).split(new RegExp(`(${pattern})`, 'gi'));
 				return parts.map((part, index) => (index % 2 === 1
 					? h('mark', { key: index, className: 'dsh-kb-mark' }, part)
 					: part));
+			};
+
+			// 行内格式：粗体 / 斜体 / 行内代码 / 链接；命中搜索词的片段套 <mark>
+			const INLINE = /(\*\*[^*\n]+\*\*|__[^_\n]+__|`[^`\n]+`|\*[^*\n]+\*|_[^_\n]+_|\[[^\]\n]+\]\([^)\s]+\))/g;
+			const inline = (value) => {
+				const source = String(value ?? '');
+				if (!/(\*\*|__|`|\]\()/.test(source)) return decorate(source);
+				const parts = source.split(INLINE);
+				return parts.map((part, index) => {
+					if (!part) return null;
+					let matched = /^\*\*([^*]+)\*\*$/.exec(part) || /^__([^_]+)__$/.exec(part);
+					if (matched) return h('strong', { key: index }, decorate(matched[1]));
+					matched = /^`([^`]+)`$/.exec(part);
+					if (matched) return h('code', { key: index, className: 'dsh-kb-inlineCode' }, matched[1]);
+					matched = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
+					if (matched) {
+						return h('a', {
+							key: index, className: 'dsh-kb-link',
+							href: matched[2], target: '_blank', rel: 'noreferrer noopener',
+						}, decorate(matched[1]));
+					}
+					matched = /^\*([^*]+)\*$/.exec(part) || /^_([^_]+)_$/.exec(part);
+					if (matched) return h('em', { key: index }, decorate(matched[1]));
+					return decorate(part);
+				});
 			};
 
 			const flush = () => {
 				if (!buffer.length) return;
 				const body = buffer.join('\n');
 				buffer = [];
-				out.push(h('p', { key: out.length, className: 'dsh-kb-p' }, decorate(body)));
+				out.push(h('p', { key: out.length, className: 'dsh-kb-p' }, inline(body)));
 			};
 
-			for (const line of lines) {
+			for (let index = 0; index < lines.length; index += 1) {
+				const line = lines[index];
+				const trimmed = line.trim();
+
+				// 代码块
+				const fence = /^```(.*)$/.exec(trimmed);
+				if (fence) {
+					flush();
+					const code = [];
+					for (index += 1; index < lines.length && !/^```/.test(lines[index].trim()); index += 1) {
+						code.push(lines[index]);
+					}
+					out.push(h('pre', { key: out.length, className: 'dsh-kb-code' }, code.join('\n')));
+					continue;
+				}
+
 				const heading = /^(#{1,6})\s+(.*)$/.exec(line);
-				const pageMark = /^\u3014第\s*(\d+)\s*页\u3015$/.exec(line.trim());
 				if (heading) {
 					flush();
 					const level = heading[1].length;
 					out.push(h('div', {
 						key: out.length,
-						className: `dsh-kb-h dsh-kb-h${level}`,
-					}, decorate(heading[2])));
+						className: `dsh-kb-h dsh-kb-h${level}`
+					}, inline(heading[2])));
 					continue;
 				}
+
+				const pageMark = /^\u3014第\s*(\d+)\s*页\u3015$/.exec(trimmed);
 				if (pageMark) {
 					flush();
 					out.push(h('div', { key: out.length, className: 'dsh-kb-pageMark' }, `第 ${pageMark[1]} 页`));
 					continue;
 				}
-				if (/^\|/.test(line)) {
+
+				// 分隔线：--- / *** / ___（三个以上）
+				if (/^([-*_])\1{2,}$/.test(trimmed)) {
 					flush();
-					out.push(h('div', { key: out.length, className: 'dsh-kb-tablerow' }, decorate(line)));
+					out.push(h('hr', { key: out.length, className: 'dsh-kb-hr' }));
 					continue;
 				}
-				if (!line.trim()) {
+
+				// 表格：连续的 | 行，第一行当表头
+				if (/^\|/.test(trimmed)) {
+					flush();
+					const rows = [];
+					while (index < lines.length && /^\|/.test(lines[index].trim())) {
+						const raw = lines[index].trim();
+						if (!/^\|[\s:|-]+\|?$/.test(raw)) {
+							rows.push(raw.replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim()));
+						}
+						index += 1;
+					}
+					index -= 1;
+					if (rows.length) {
+						const head = rows[0];
+						const rest = rows.slice(1);
+						out.push(h('div', { key: out.length, className: 'dsh-kb-mdTblWrap' },
+							h('table', { className: 'dsh-kb-mdTbl' },
+								h('thead', null, h('tr', null, head.map((cell, cellIndex) => h('th', { key: cellIndex }, inline(cell))))),
+								h('tbody', null, rest.map((row, rowIndex) => h('tr', { key: rowIndex },
+									head.map((_, cellIndex) => h('td', { key: cellIndex }, inline(row[cellIndex] ?? '')))))))));
+					}
+					continue;
+				}
+
+				// 引用：连续 > 行
+				if (/^>\s?/.test(trimmed)) {
+					flush();
+					const quoted = [];
+					while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
+						quoted.push(lines[index].trim().replace(/^>\s?/, ''));
+						index += 1;
+					}
+					index -= 1;
+					out.push(h('blockquote', { key: out.length, className: 'dsh-kb-quote' },
+						quoted.map((item, itemIndex) => h('p', { key: itemIndex, className: 'dsh-kb-p' }, inline(item)))));
+					continue;
+				}
+
+				// 列表：- / * / + 与 1.
+				const bullet = /^([-*+])\s+(.*)$/.exec(trimmed);
+				const numbered = /^(\d{1,2})[.)]\s+(.*)$/.exec(trimmed);
+				if (bullet || numbered) {
+					flush();
+					const ordered = Boolean(numbered);
+					const items = [];
+					while (index < lines.length) {
+						const next = lines[index].trim();
+						const hit = ordered ? /^(\d{1,2})[.)]\s+(.*)$/.exec(next) : /^([-*+])\s+(.*)$/.exec(next);
+						if (!hit) break;
+						items.push(hit[2]);
+						index += 1;
+					}
+					index -= 1;
+					out.push(h(ordered ? 'ol' : 'ul', { key: out.length, className: 'dsh-kb-list' },
+						items.map((item, itemIndex) => h('li', { key: itemIndex }, inline(item)))));
+					continue;
+				}
+
+				if (!trimmed) {
 					flush();
 					continue;
 				}
@@ -618,6 +722,7 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 			flush();
 			return out.length ? out : [h('p', { key: 0, className: 'dsh-kb-hint' }, '（没有正文：可能还在解析，或这个格式抽不出文字）')];
 		}
+
 
 		function isImage(ext) {
 			return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext);
@@ -985,7 +1090,7 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 											: h('div', { className: 'dsh-kb-pagesLoading' },
 												h('span', { className: 'dsh-kb-spinner', 'aria-hidden': 'true' }),
 												'正在渲染页面…第一次打开会慢一些，之后是缓存。'))
-								: h('div', { className: 'dsh-kb-text' }, renderText(current.docText, current.query)),
+								: h('div', { className: 'dsh-kb-text' }, renderMarkdown(current.docText, current.query)),
 					!officeVisual && doc.ext !== 'pdf' && !isImage(doc.ext) && current.docHasMore
 						? h('button', {
 							type: 'button', className: 'dsh-kb-btn dsh-kb-more',
@@ -2465,6 +2570,15 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
   '.dsh-kb-sheetTbl th{position:sticky;top:0;z-index:1;background:var(--dsh-surface-2,#f6f7f9);font-weight:600}',
   '.dsh-kb-sheetTbl tbody tr:nth-child(even) td{background:rgba(128,128,128,.04)}',
   '.dsh-kb-sheetFoot{padding:8px 12px 12px;font-size:11.5px;color:var(--dsh-text-3,#8a8f98)}',
+  '.dsh-kb-quote{margin:0 0 10px;padding:8px 12px;border-left:3px solid var(--dsw-alias-border-light);color:var(--dsw-alias-label-secondary);white-space:pre-wrap;}',
+  '.dsh-kb-quote .dsh-kb-p{margin:0 0 6px;}',
+  '.dsh-kb-hr{border:none;border-top:1px solid var(--dsw-alias-border-light);margin:14px 0;}',
+  '.dsh-kb-inlineCode{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--dsw-alias-bg-layer-2);border-radius:4px;padding:1px 4px;}',
+  '.dsh-kb-link{color:var(--dsw-alias-label-primary);text-decoration:underline;}',
+  '.dsh-kb-mdTblWrap{overflow-x:auto;margin:0 0 12px;border:1px solid var(--dsw-alias-border-light);border-radius:8px;}',
+  '.dsh-kb-mdTbl{border-collapse:collapse;font-size:12.5px;min-width:100%;}',
+  '.dsh-kb-mdTbl th,.dsh-kb-mdTbl td{padding:6px 10px;border-bottom:1px solid var(--dsw-alias-border-light);border-right:1px solid var(--dsw-alias-border-light);text-align:left;vertical-align:top;}',
+  '.dsh-kb-mdTbl th{background:var(--dsw-alias-bg-layer-2);font-weight:600;}',
 				'.dsh-kb-tablerow{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-mark{background:rgba(217,164,65,.32);color:inherit;border-radius:2px;}',
 				'.dsh-kb-image{max-width:100%;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);}',
@@ -2808,7 +2922,7 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 		const plugin = { inject: ['slots'], apply };
 		// 仅测试用：让离线冒烟测试能摆出各种状态再渲染（浏览器里不生效）
 		if (typeof globalThis !== 'undefined' && globalThis.__DSH_KB_TEST__) {
-			plugin.__test = { patch, state, askText, askConfirm, renderText, isImage };
+			plugin.__test = { patch, state, askText, askConfirm, renderText: renderMarkdown, renderMarkdown, isImage };
 		}
 		return plugin;
 	},
