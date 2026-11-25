@@ -581,6 +581,32 @@ console.log('\n[9] 对练面板');
 		check('单元格没被吃掉', flat.some((node) => node.type === 'td' && String(node.props?.children) === '2026-11-02'));
 	}
 
+	console.log('\n[9.7] 大屏：文本类文档按 Markdown 展示');
+	{
+		internals.patch({
+			doc: { id: 'd5', kbId: 'k1', parentId: null, kind: 'doc', name: '汇报.md', sort: 4, bytes: 1200, status: 'ready', ext: 'md', chars: 900, pageCount: 0 },
+			docText: '# 标题\n\n**汇报人：** 张三\n\n---\n\n- 第一条',
+			bigView: true,
+			previewMode: 'visual',
+		});
+		const bigPage = renderPage();
+		const flatBig = [];
+		const walkBig = (list) => {
+			for (const node of list || []) {
+				if (!node || typeof node !== 'object') continue;
+				flatBig.push(node);
+				const kids = node.props?.children;
+				if (Array.isArray(kids)) walkBig(kids);
+				else if (kids && typeof kids === 'object') walkBig([kids]);
+			}
+		};
+		walkBig(bigPage);
+		check('大屏有文本容器', flatBig.some((node) => String(node.props?.className || '').includes('dsh-kb-bigText')));
+		check('大屏里渲染了粗体', flatBig.some((node) => node.type === 'strong'));
+		check('大屏不再提示没有预览', !JSON.stringify(bigPage).includes('没有大屏预览'));
+		internals.patch({ bigView: false, doc: null, docText: '' });
+	}
+
 console.log('\n[10] 卸载清理');
 try {
 	for (const dispose of disposers) dispose();

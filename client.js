@@ -23,6 +23,10 @@ window.__ModuleLoader__.load({
 		const OFFICE_EXT = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
 // 有单元格网格可画的表格（xls 是老二进制格式，只能走 LibreOffice 的逐页预览）
 const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
+// 纯文本类文档：大屏里按 Markdown 阅读，而不是提示「没有大屏预览」
+const TEXT_DOC_EXT = ['md', 'markdown', 'txt', 'text', 'log', 'json', 'yaml', 'yml', 'html', 'htm',
+	'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'py', 'java', 'go', 'rs', 'c', 'h', 'cpp', 'hpp',
+	'cs', 'rb', 'php', 'sh', 'ps1', 'sql', 'css', 'scss', 'xml', 'toml', 'ini', 'conf'];
 		const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
 		// Chromium PDF 阅读器的参数：适应宽度 + 收起缩略图栏
 		const PDF_FRAGMENT = '#view=FitH&navpanes=0';
@@ -1204,6 +1208,12 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 											alt: `${doc.name} 第 ${one} 页`,
 										}),
 										h('span', { className: 'dsh-kb-pageNo' }, one))))
+							: TEXT_DOC_EXT.includes(doc.ext)
+								? h('div', { className: 'dsh-kb-bigText' },
+									h('div', { className: 'dsh-kb-text dsh-kb-text--big' },
+										current.docText
+											? renderMarkdown(current.docText, current.query)
+											: h('div', { className: 'dsh-kb-hint' }, doc.status === 'pending' || doc.status === 'parsing' ? '正在解析，稍等一下…' : '没有可显示的正文')))
 								: h('div', { className: 'dsh-kb-pagesLoading' },
 									h('span', { className: 'dsh-kb-spinner', 'aria-hidden': 'true' }),
 									office ? '正在渲染页面…' : '这个格式没有大屏预览，可以点「下载」用系统应用打开')));
@@ -2676,6 +2686,8 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 				'.dsh-kb-bigBody{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-2);}',
   '.dsh-kb-bigSheet{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 18px 20px;}',
   '.dsh-kb-bigSheet .dsh-kb-sheetTbl{font-size:14px;}',
+  '.dsh-kb-bigText{flex:1;min-height:0;overflow:auto;padding:28px 40px 60px;display:flex;justify-content:center;}',
+  '.dsh-kb-text--big{max-width:900px;width:100%;font-size:15px;line-height:1.9;}',
 				'.dsh-kb-bigBody .dsh-kb-pages{padding:18px 22px 40px;}',
 				'.dsh-kb-bigBody .dsh-kb-pageShot{max-width:1400px;}',
 				'.dsh-kb-bigImg{max-width:100%;max-height:100%;object-fit:contain;margin:auto;display:block;}',
