@@ -799,30 +799,6 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 					if (partialTimer.current) clearTimeout(partialTimer.current);
 				};
 			}, [doc?.id, current.previewMode]);
-			// 表格文件：抓单元格网格（宽表能横向滚动，不会被 LibreOffice 的 PDF 页裁掉）
-			React.useEffect(() => {
-				const sheetDoc = doc && SHEET_EXT.includes(doc.ext) ? doc : null;
-				if (!sheetDoc || current.previewMode === 'text') {
-					if (current.sheet) patch({ sheet: null, sheetTab: 0, sheetError: '' });
-					return undefined;
-				}
-				let cancelled = false;
-				(async () => {
-					try {
-						const data = await api(`/doc?id=${encodeURIComponent(sheetDoc.id)}&action=grid`);
-						if (cancelled) return;
-						patch({
-							sheet: { docId: sheetDoc.id, sheets: data.sheets || [], sheetCount: data.sheetCount || 0 },
-							sheetTab: 0,
-							sheetError: '',
-						});
-					} catch (error) {
-						if (cancelled) return;
-						patch({ sheet: null, sheetError: error.message || '表格解析失败' });
-					}
-				})();
-				return () => { cancelled = true; };
-			}, [doc?.id, current.previewMode]);
 
 			if (!doc) {
 				if (current.kbs.length === 0) {
@@ -867,42 +843,6 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 				}
 				if (visible !== state.currentPage) patch({ currentPage: visible, pageInput: String(visible) });
 			};
-			// 表格视图：单元格直接画成表，表头吸顶、可横向滚动
-			function renderSheet() {
-				const data = current.sheet;
-				if (current.sheetError) {
-					return h('div', { className: 'dsh-kb-banner dsh-kb-banner--bad' },
-						h(Icon, { name: 'warn', size: 15 }),
-						h('span', null, current.sheetError),
-						h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => patch({ previewMode: 'text' }) }, '看文字版'));
-				}
-				if (!data || data.docId !== doc.id) return h('div', { className: 'dsh-kb-hint' }, '正在读取表格…');
-				const sheets = data.sheets || [];
-				if (!sheets.length) return h('div', { className: 'dsh-kb-hint' }, '这个文件里没有工作表。');
-				const tab = Math.min(Math.max(0, Number(current.sheetTab) || 0), sheets.length - 1);
-				const sheet = sheets[tab];
-				if (!sheet || !sheet.rows || !sheet.rows.length) return h('div', { className: 'dsh-kb-hint' }, '这张表是空的。');
-				const head = sheet.rows[0];
-				const rows = sheet.rows.slice(1);
-				const width = Math.max(head.length, ...rows.map((row) => row.length), 1);
-				const cellAt = (row, index) => (row[index] == null ? '' : String(row[index]));
-				return h('div', { className: 'dsh-kb-sheet' },
-					sheets.length > 1
-						? h('div', { className: 'dsh-kb-sheetTabs' }, sheets.map((item, index) => h('button', {
-							type: 'button', key: index,
-							className: cx('dsh-kb-sheetTab', index === tab && 'dsh-kb-sheetTab--on'),
-							onClick: () => patch({ sheetTab: index }),
-						}, item.name)))
-						: null,
-					h('div', { className: 'dsh-kb-sheetScroll' },
-						h('table', { className: 'dsh-kb-sheetTbl' },
-							h('thead', null, h('tr', null, Array.from({ length: width }, (_, index) => h('th', { key: index }, cellAt(head, index))))),
-							h('tbody', null, rows.map((row, rowIndex) => h('tr', { key: rowIndex },
-								Array.from({ length: width }, (_, index) => h('td', { key: index }, cellAt(row, index)))))))),
-					h('div', { className: 'dsh-kb-sheetFoot' },
-						`${sheet.rows.length} 行 × ${width} 列` + (sheet.totalRows && sheet.totalRows > sheet.rows.length ? `（原表 ${sheet.totalRows} 行，只显示前 ${sheet.rows.length} 行）` : ''),
-						h('span', null, ' · 要改格式就点「下载」用 Excel 打开')));
-			}
 
 			return h('div', { className: 'dsh-kb-doc' },
 				h('div', { className: 'dsh-kb-docHead' },
@@ -980,7 +920,7 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 								src: `${rawUrl(doc)}${PDF_FRAGMENT}`,
 							})
 							: isSheet && current.previewMode !== 'text'
-								? renderSheet()
+								? h(SheetTable, { doc })
 							: officeVisual
 								? h('div', { className: 'dsh-kb-viewer' },
 									officeInfo && !officeInfo.error
@@ -1127,9 +1067,71 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 		}
 
 		// ── 大屏预览：铺满整个窗口（不依赖 window.open / target=_blank，桌面端会拦）──
+		// 表格渲染：纯函数，方便测试与复用（文档页 / 大屏都用它）
+		function sheetNodes(data, tab, onTab) {
+			const sheets = data?.sheets || [];
+			if (!sheets.length) return [h('div', { key: 'empty', className: 'dsh-kb-hint' }, '这个文件里没有工作表。')];
+			const index = Math.min(Math.max(0, Number(tab) || 0), sheets.length - 1);
+			const sheet = sheets[index];
+			if (!sheet || !sheet.rows || !sheet.rows.length) return [h('div', { key: 'empty', className: 'dsh-kb-hint' }, '这张表是空的。')];
+			const head = sheet.rows[0];
+			const rows = sheet.rows.slice(1);
+			const width = Math.max(head.length, ...rows.map((row) => row.length), 1);
+			const cellAt = (row, at) => (row[at] == null ? '' : String(row[at]));
+			return [
+				sheets.length > 1
+					? h('div', { key: 'tabs', className: 'dsh-kb-sheetTabs' }, sheets.map((item, at) => h('button', {
+						type: 'button', key: at,
+						className: cx('dsh-kb-sheetTab', at === index && 'dsh-kb-sheetTab--on'),
+						onClick: () => onTab?.(at),
+					}, item.name)))
+					: null,
+				h('div', { key: 'scroll', className: 'dsh-kb-sheetScroll' },
+					h('table', { className: 'dsh-kb-sheetTbl' },
+						h('thead', null, h('tr', null, Array.from({ length: width }, (_, at) => h('th', { key: at }, cellAt(head, at))))),
+						h('tbody', null, rows.map((row, rowIndex) => h('tr', { key: rowIndex },
+							Array.from({ length: width }, (_, at) => h('td', { key: at }, cellAt(row, at)))))))),
+				h('div', { key: 'foot', className: 'dsh-kb-sheetFoot' },
+					`${sheet.rows.length} 行 × ${width} 列` + (sheet.totalRows && sheet.totalRows > sheet.rows.length ? `（原表 ${sheet.totalRows} 行，只显示前 ${sheet.rows.length} 行）` : ''),
+					h('span', null, ' · 要改格式就点「下载」用 Excel 打开')),
+			];
+		}
+
+		// 表格视图：自己抓网格，文档页和大屏都用它
+		function SheetTable({ doc }) {
+			const [data, setData] = React.useState(null);
+			const [tab, setTab] = React.useState(0);
+			const [error, setError] = React.useState('');
+			React.useEffect(() => {
+				let cancelled = false;
+				setData(null);
+				setError('');
+				setTab(0);
+				(async () => {
+					try {
+						const payload = await api(`/doc?id=${encodeURIComponent(doc.id)}&action=grid`);
+						if (cancelled) return;
+						setData({ sheets: payload.sheets || [] });
+					} catch (err) {
+						if (cancelled) return;
+						setError(err.message || '表格解析失败');
+					}
+				})();
+				return () => { cancelled = true; };
+			}, [doc.id]);
+			if (error) {
+				return h('div', { className: 'dsh-kb-banner dsh-kb-banner--bad' },
+					h(Icon, { name: 'warn', size: 15 }),
+					h('span', null, error));
+			}
+			if (!data) return h('div', { className: 'dsh-kb-hint' }, '正在读取表格…');
+			return h('div', { className: 'dsh-kb-sheet' }, sheetNodes(data, tab, setTab));
+		}
+
 		function BigView({ doc }) {
 			const current = useStore();
 			const office = OFFICE_EXT.includes(doc.ext);
+			const isSheetDoc = SHEET_EXT.includes(doc.ext);
 			const info = current.previewInfo?.docId === doc.id ? current.previewInfo : null;
 			const total = info?.pages || 0;
 			const single = current.bigMode !== 'scroll';
@@ -1156,7 +1158,7 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 			return h('div', { className: 'dsh-kb-big' },
 				h('div', { className: 'dsh-kb-bigBar' },
 					h('span', { className: 'dsh-kb-bigTitle' }, doc.name),
-					office && info
+					office && info && !isSheetDoc
 						? h('span', { className: 'dsh-kb-bigNav' },
 							h('button', { type: 'button', className: 'dsh-kb-navBtn', title: '上一页', disabled: page <= 1, onClick: () => go(page - 1) }, '‹'),
 							h('span', { className: 'dsh-kb-pageTotal' }, `${page} / ${info.pageCount || info.pages}`),
@@ -1183,6 +1185,8 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 						? h('img', { className: 'dsh-kb-bigImg', src: rawUrl(doc), alt: doc.name })
 						: doc.ext === 'pdf'
 							? h('iframe', { className: 'dsh-kb-bigFrame', title: doc.name, src: `${rawUrl(doc)}${PDF_FRAGMENT}` })
+						: isSheetDoc
+							? h('div', { className: 'dsh-kb-bigSheet' }, h(SheetTable, { doc }))
 							: office && info && !info.error
 								? h('div', { className: cx('dsh-kb-pages', single && 'dsh-kb-pages--single') },
 									(single ? [page] : Array.from({ length: info.pages }, (_, index) => index + 1))
@@ -2670,6 +2674,8 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 				'.dsh-kb-bigNav{display:flex;align-items:center;gap:8px;}',
 				'.dsh-kb-bigBody .dsh-kb-pages--single .dsh-kb-pageShot{max-width:1400px;}',
 				'.dsh-kb-bigBody{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-2);}',
+  '.dsh-kb-bigSheet{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 18px 20px;}',
+  '.dsh-kb-bigSheet .dsh-kb-sheetTbl{font-size:14px;}',
 				'.dsh-kb-bigBody .dsh-kb-pages{padding:18px 22px 40px;}',
 				'.dsh-kb-bigBody .dsh-kb-pageShot{max-width:1400px;}',
 				'.dsh-kb-bigImg{max-width:100%;max-height:100%;object-fit:contain;margin:auto;display:block;}',
@@ -2922,7 +2928,7 @@ const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 		const plugin = { inject: ['slots'], apply };
 		// 仅测试用：让离线冒烟测试能摆出各种状态再渲染（浏览器里不生效）
 		if (typeof globalThis !== 'undefined' && globalThis.__DSH_KB_TEST__) {
-			plugin.__test = { patch, state, askText, askConfirm, renderText: renderMarkdown, renderMarkdown, isImage };
+			plugin.__test = { patch, state, askText, askConfirm, renderText: renderMarkdown, renderMarkdown, isImage, sheetNodes };
 		}
 		return plugin;
 	},
