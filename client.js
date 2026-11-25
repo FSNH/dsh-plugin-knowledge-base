@@ -2679,7 +2679,7 @@ const TEXT_DOC_EXT = ['md', 'markdown', 'txt', 'text', 'log', 'json', 'yaml', 'y
 				'.dsh-kb-moveItem{padding:6px 10px;border:none;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:12.5px;text-align:left;cursor:pointer;}',
 				'.dsh-kb-moveItem:hover{background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-big{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-1);}',
-				'.dsh-kb-bigBar{display:flex;flex:none;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);}',
+  '.dsh-kb-bigBar{display:flex;flex:none;align-items:center;gap:10px;min-height:44px;padding:10px 152px 10px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);}',
 				'.dsh-kb-bigTitle{font-size:13px;font-weight:600;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
 				'.dsh-kb-bigNav{display:flex;align-items:center;gap:8px;}',
 				'.dsh-kb-bigBody .dsh-kb-pages--single .dsh-kb-pageShot{max-width:1400px;}',
