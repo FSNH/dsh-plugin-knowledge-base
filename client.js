@@ -1162,6 +1162,7 @@ const TEXT_DOC_EXT = ['md', 'markdown', 'txt', 'text', 'log', 'json', 'yaml', 'y
 			return h('div', { className: 'dsh-kb-big' },
 				h('div', { className: 'dsh-kb-bigBar' },
 					h('span', { className: 'dsh-kb-bigTitle' }, doc.name),
+					h('span', { className: 'dsh-kb-bigHint' }, '按 Esc 退出大屏'),
 					office && info && !isSheetDoc
 						? h('span', { className: 'dsh-kb-bigNav' },
 							h('button', { type: 'button', className: 'dsh-kb-navBtn', title: '上一页', disabled: page <= 1, onClick: () => go(page - 1) }, '‹'),
@@ -1180,10 +1181,7 @@ const TEXT_DOC_EXT = ['md', 'markdown', 'txt', 'text', 'log', 'json', 'yaml', 'y
 								}, '连续')))
 						: null,
 					h('span', { className: 'dsh-kb-viewerGrow' }),
-					h('button', {
-						type: 'button', className: 'dsh-kb-btn dsh-kb-btn--primary', title: '恢复成面板视图（Esc）',
-						onClick: () => patch({ bigView: false }),
-					}, h(Icon, { name: 'close', size: 13 }), '恢复')),
+),
 				h('div', { className: 'dsh-kb-bigBody' },
 					isImage(doc.ext)
 						? h('img', { className: 'dsh-kb-bigImg', src: rawUrl(doc), alt: doc.name })
@@ -2679,8 +2677,9 @@ const TEXT_DOC_EXT = ['md', 'markdown', 'txt', 'text', 'log', 'json', 'yaml', 'y
 				'.dsh-kb-moveItem{padding:6px 10px;border:none;border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:12.5px;text-align:left;cursor:pointer;}',
 				'.dsh-kb-moveItem:hover{background:var(--dsw-alias-bg-layer-2);}',
 				'.dsh-kb-big{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-1);}',
-  '.dsh-kb-bigBar{display:flex;flex:none;align-items:center;gap:10px;min-height:44px;padding:10px 152px 10px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);}',
+  '.dsh-kb-bigBar{display:flex;flex:none;align-items:center;gap:10px;min-height:44px;padding:10px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);}',
 				'.dsh-kb-bigTitle{font-size:13px;font-weight:600;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+  '.dsh-kb-bigHint{font-size:11.5px;color:var(--dsw-alias-label-secondary);white-space:nowrap;}',
 				'.dsh-kb-bigNav{display:flex;align-items:center;gap:8px;}',
 				'.dsh-kb-bigBody .dsh-kb-pages--single .dsh-kb-pageShot{max-width:1400px;}',
 				'.dsh-kb-bigBody{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--dsw-alias-bg-layer-2);}',

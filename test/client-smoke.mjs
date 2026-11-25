@@ -272,7 +272,7 @@ check('有大屏按钮', tree.some((node) => node.type === 'button' && String(no
 const bigEl = tree.find((node) => String(node.props?.className).includes('dsh-kb-big'));
 check('大屏模式渲染覆盖层', Boolean(bigEl));
 const bigNodes = bigEl ? collect(bigEl) : [];
-check('大屏右上角有「恢复」按钮', bigNodes.some((node) => node.type === 'button' && String(node.props?.children || '').includes('恢复')));
+check('大屏提示按 Esc 退出', bigNodes.some((node) => String(node.props?.children || '').includes('按 Esc 退出')));
 const bigImgs = bigNodes.filter((node) => node.type === 'img' && String(node.props?.src || '').includes('action=page'));
 check('大屏默认单页：只渲染 1 张', bigImgs.length === 1, `实际 ${bigImgs.length}`);
 check('大屏单页显示的是当前页', String(bigImgs[0]?.props?.src || '').includes('n=2'));
