@@ -515,6 +515,25 @@ console.log('\n[9] 对练面板');
 	internals.patch({ examOpen: false });
 }
 
+	console.log('\n[9.5] 表格文件渲染成表格');
+	{
+		internals.patch({
+			doc: { id: 'd4', kbId: 'k1', parentId: null, kind: 'doc', name: '统计.xlsx', sort: 3, bytes: 7325, status: 'ready', ext: 'xlsx', chars: 941, pageCount: 1 },
+			previewMode: 'visual',
+			sheet: {
+				docId: 'd4',
+				sheetCount: 1,
+				sheets: [{ name: 'Sheet1', rows: [['统计日期', '访问次数'], ['2026-11-02', '33']], columns: 2, totalRows: 2, truncated: false }],
+			},
+		});
+		const sheetPage = renderPage();
+		check('xlsx 渲染出表格', sheetPage.some((node) => node.type === 'table' && String(node.props?.className || '').includes('dsh-kb-sheetTbl')));
+		check('表头单元格是第一行', sheetPage.some((node) => node.type === 'th' && String(node.props?.children) === '统计日期'));
+		check('日期没有被截断', sheetPage.some((node) => node.type === 'td' && String(node.props?.children) === '2026-11-02'));
+		check('底部有行列说明', sheetPage.some((node) => String(node.props?.className || '').includes('dsh-kb-sheetFoot')));
+		internals.patch({ sheet: null, doc: null });
+	}
+
 console.log('\n[10] 卸载清理');
 try {
 	for (const dispose of disposers) dispose();

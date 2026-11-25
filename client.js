@@ -21,6 +21,8 @@ window.__ModuleLoader__.load({
 		const PANEL_ID = 'dsh-knowledge-base';
 		const TEXT_PAGE = 24000;
 		const OFFICE_EXT = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
+// 有单元格网格可画的表格（xls 是老二进制格式，只能走 LibreOffice 的逐页预览）
+const SHEET_EXT = ['xlsx', 'csv', 'tsv'];
 		const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
 		// Chromium PDF 阅读器的参数：适应宽度 + 收起缩略图栏
 		const PDF_FRAGMENT = '#view=FitH&navpanes=0';
@@ -123,6 +125,9 @@ window.__ModuleLoader__.load({
 			previewLoaded: false,
 			previewError: '',
 			previewInfo: null,
+			sheet: null,
+			sheetTab: 0,
+			sheetError: '',
 			currentPage: 1,
 			pageMode: 'scroll',
 			pageInput: '1',
@@ -689,6 +694,31 @@ window.__ModuleLoader__.load({
 					if (partialTimer.current) clearTimeout(partialTimer.current);
 				};
 			}, [doc?.id, current.previewMode]);
+			// 表格文件：抓单元格网格（宽表能横向滚动，不会被 LibreOffice 的 PDF 页裁掉）
+			React.useEffect(() => {
+				const sheetDoc = doc && SHEET_EXT.includes(doc.ext) ? doc : null;
+				if (!sheetDoc || current.previewMode === 'text') {
+					if (current.sheet) patch({ sheet: null, sheetTab: 0, sheetError: '' });
+					return undefined;
+				}
+				let cancelled = false;
+				(async () => {
+					try {
+						const data = await api(`/doc?id=${encodeURIComponent(sheetDoc.id)}&action=grid`);
+						if (cancelled) return;
+						patch({
+							sheet: { docId: sheetDoc.id, sheets: data.sheets || [], sheetCount: data.sheetCount || 0 },
+							sheetTab: 0,
+							sheetError: '',
+						});
+					} catch (error) {
+						if (cancelled) return;
+						patch({ sheet: null, sheetError: error.message || '表格解析失败' });
+					}
+				})();
+				return () => { cancelled = true; };
+			}, [doc?.id, current.previewMode]);
+
 			if (!doc) {
 				if (current.kbs.length === 0) {
 					return h('div', { className: 'dsh-kb-empty' },
@@ -705,9 +735,10 @@ window.__ModuleLoader__.load({
 			const failed = doc.status === 'failed';
 			const pending = doc.status === 'pending' || doc.status === 'parsing';
 			const office = OFFICE_EXT.includes(doc.ext);
+			const isSheet = SHEET_EXT.includes(doc.ext);
 			const previewAvailable = current.caps?.officePreview !== false;
 			const officeVisual = office && previewAvailable && current.previewMode !== 'text';
-			const visual = isImage(doc.ext) ? false : (doc.ext === 'pdf' || officeVisual);
+			const visual = isImage(doc.ext) || isSheet ? false : (doc.ext === 'pdf' || officeVisual);
 			const officeInfo = current.previewInfo?.docId === doc.id ? current.previewInfo : null;
 			const totalPages = officeInfo?.pages || 0;
 			const pageNow = Math.min(Math.max(1, Number(current.currentPage) || 1), totalPages || 1);
@@ -731,6 +762,43 @@ window.__ModuleLoader__.load({
 				}
 				if (visible !== state.currentPage) patch({ currentPage: visible, pageInput: String(visible) });
 			};
+			// 表格视图：单元格直接画成表，表头吸顶、可横向滚动
+			function renderSheet() {
+				const data = current.sheet;
+				if (current.sheetError) {
+					return h('div', { className: 'dsh-kb-banner dsh-kb-banner--bad' },
+						h(Icon, { name: 'warn', size: 15 }),
+						h('span', null, current.sheetError),
+						h('button', { type: 'button', className: 'dsh-kb-btn', onClick: () => patch({ previewMode: 'text' }) }, '看文字版'));
+				}
+				if (!data || data.docId !== doc.id) return h('div', { className: 'dsh-kb-hint' }, '正在读取表格…');
+				const sheets = data.sheets || [];
+				if (!sheets.length) return h('div', { className: 'dsh-kb-hint' }, '这个文件里没有工作表。');
+				const tab = Math.min(Math.max(0, Number(current.sheetTab) || 0), sheets.length - 1);
+				const sheet = sheets[tab];
+				if (!sheet || !sheet.rows || !sheet.rows.length) return h('div', { className: 'dsh-kb-hint' }, '这张表是空的。');
+				const head = sheet.rows[0];
+				const rows = sheet.rows.slice(1);
+				const width = Math.max(head.length, ...rows.map((row) => row.length), 1);
+				const cellAt = (row, index) => (row[index] == null ? '' : String(row[index]));
+				return h('div', { className: 'dsh-kb-sheet' },
+					sheets.length > 1
+						? h('div', { className: 'dsh-kb-sheetTabs' }, sheets.map((item, index) => h('button', {
+							type: 'button', key: index,
+							className: cx('dsh-kb-sheetTab', index === tab && 'dsh-kb-sheetTab--on'),
+							onClick: () => patch({ sheetTab: index }),
+						}, item.name)))
+						: null,
+					h('div', { className: 'dsh-kb-sheetScroll' },
+						h('table', { className: 'dsh-kb-sheetTbl' },
+							h('thead', null, h('tr', null, Array.from({ length: width }, (_, index) => h('th', { key: index }, cellAt(head, index))))),
+							h('tbody', null, rows.map((row, rowIndex) => h('tr', { key: rowIndex },
+								Array.from({ length: width }, (_, index) => h('td', { key: index }, cellAt(row, index)))))))),
+					h('div', { className: 'dsh-kb-sheetFoot' },
+						`${sheet.rows.length} 行 × ${width} 列` + (sheet.totalRows && sheet.totalRows > sheet.rows.length ? `（原表 ${sheet.totalRows} 行，只显示前 ${sheet.rows.length} 行）` : ''),
+						h('span', null, ' · 要改格式就点「下载」用 Excel 打开')));
+			}
+
 			return h('div', { className: 'dsh-kb-doc' },
 				h('div', { className: 'dsh-kb-docHead' },
 					h('div', { className: 'dsh-kb-docTitle' }, doc.name),
@@ -758,7 +826,7 @@ window.__ModuleLoader__.load({
 								type: 'button',
 								className: cx('dsh-kb-segBtn', officeVisual && 'dsh-kb-segBtn--on'),
 								onClick: () => patch({ previewMode: 'visual' }),
-							}, '原版式'),
+							}, isSheet ? '表格' : '原版式'),
 							h('button', {
 								type: 'button',
 								className: cx('dsh-kb-segBtn', !officeVisual && 'dsh-kb-segBtn--on'),
@@ -806,6 +874,8 @@ window.__ModuleLoader__.load({
 								title: doc.name,
 								src: `${rawUrl(doc)}${PDF_FRAGMENT}`,
 							})
+							: isSheet && current.previewMode !== 'text'
+								? renderSheet()
 							: officeVisual
 								? h('div', { className: 'dsh-kb-viewer' },
 									officeInfo && !officeInfo.error
@@ -2385,6 +2455,16 @@ window.__ModuleLoader__.load({
 				'.dsh-kb-h{margin:16px 0 8px;font-weight:600;}',
 				'.dsh-kb-h1{font-size:16px;}.dsh-kb-h2{font-size:15px;}.dsh-kb-h3{font-size:14px;}.dsh-kb-h4,.dsh-kb-h5,.dsh-kb-h6{font-size:13.5px;}',
 				'.dsh-kb-pageMark{margin:14px 0 6px;font-size:11.5px;color:var(--dsw-alias-label-secondary);letter-spacing:.04em;}',
+  '.dsh-kb-sheet{display:flex;flex-direction:column;min-height:0;flex:1;gap:0;width:100%}',
+  '.dsh-kb-sheetTabs{display:flex;gap:6px;padding:8px 10px 0;flex-wrap:wrap}',
+  '.dsh-kb-sheetTab{border:1px solid var(--dsh-border,rgba(128,128,128,.28));background:transparent;color:inherit;font-size:12px;padding:4px 10px;border-radius:8px;cursor:pointer}',
+  '.dsh-kb-sheetTab--on{background:var(--dsh-accent,#3b82f6);border-color:transparent;color:#fff}',
+  '.dsh-kb-sheetScroll{flex:1;min-height:0;overflow:auto;border:1px solid var(--dsh-border,rgba(128,128,128,.22));border-radius:10px;margin:8px 10px 0;background:var(--dsh-surface,#fff)}',
+  '.dsh-kb-sheetTbl{border-collapse:separate;border-spacing:0;font-size:12.5px;white-space:nowrap;min-width:100%}',
+  '.dsh-kb-sheetTbl th,.dsh-kb-sheetTbl td{padding:7px 10px;border-bottom:1px solid var(--dsh-border,rgba(128,128,128,.16));border-right:1px solid var(--dsh-border,rgba(128,128,128,.12));text-align:left}',
+  '.dsh-kb-sheetTbl th{position:sticky;top:0;z-index:1;background:var(--dsh-surface-2,#f6f7f9);font-weight:600}',
+  '.dsh-kb-sheetTbl tbody tr:nth-child(even) td{background:rgba(128,128,128,.04)}',
+  '.dsh-kb-sheetFoot{padding:8px 12px 12px;font-size:11.5px;color:var(--dsh-text-3,#8a8f98)}',
 				'.dsh-kb-tablerow{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;color:var(--dsw-alias-label-secondary);}',
 				'.dsh-kb-mark{background:rgba(217,164,65,.32);color:inherit;border-radius:2px;}',
 				'.dsh-kb-image{max-width:100%;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);}',
