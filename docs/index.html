@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSH 个人知识库插件 · 功能演示</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #0b0f14; color: #e6eaf2;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 20px 80px; }
+  .kicker { color: #5b8def; font-size: 15px; font-weight: 600; letter-spacing: .04em; }
+  h1 { font-size: 38px; margin: 8px 0 6px; letter-spacing: -.02em; }
+  .sub { color: #8b95a5; font-size: 15px; margin-bottom: 24px; }
+  .player {
+    position: relative; border-radius: 14px; overflow: hidden;
+    background: #000; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    border: 1px solid #212a36;
+  }
+  video { display: block; width: 100%; height: auto; }
+  .meta { display: flex; gap: 16px; flex-wrap: wrap; margin: 14px 0 0; color: #7b8698; font-size: 13.5px; }
+  .meta a { color: #7fb0ff; text-decoration: none; }
+  .meta a:hover { text-decoration: underline; }
+  h2 { font-size: 19px; margin: 40px 0 12px; color: #c8d3e2; }
+  .list { display: grid; gap: 6px; }
+  .ch {
+    display: grid; grid-template-columns: 40px 150px 1fr 60px; align-items: center; gap: 10px;
+    width: 100%; text-align: left; padding: 10px 14px; border-radius: 10px;
+    background: #101720; border: 1px solid #1b2431; color: inherit;
+    font: inherit; font-size: 14.5px; cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  .ch:hover { background: #16202d; border-color: #2b3a4d; }
+  .ch.on { background: #16233a; border-color: #2563eb; }
+  
+  .ch .idx { color: #55637a; font-variant-numeric: tabular-nums; }
+  .ch .name { color: #e6eaf2; font-weight: 600; }
+  .ch .desc { color: #8b95a5; font-size: 13.5px; }
+  .ch .t { color: #5b8def; font-variant-numeric: tabular-nums; text-align: right; font-size: 13.5px; }
+  footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #1b2431; color: #5f6b7c; font-size: 13.5px; }
+  footer a { color: #7fb0ff; text-decoration: none; }
+  @media (max-width: 640px) {
+    h1 { font-size: 26px; }
+    .ch { grid-template-columns: 32px 1fr 52px; }
+    .ch .desc { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">DeepSeek Harness 插件</div>
+  <h1>个人知识库 · 功能演示</h1>
+  <div class="sub">1 分 41 秒｜15 个片段｜用「演示库（示例数据）」录制，不含真实业务内容</div>
+
+  <div class="player">
+    <video id="v" controls preload="metadata" playsinline poster="media/demo-cover.png">
+      <source src="media/demo-1080p.mp4" type="video/mp4">
+      你的浏览器不支持 video 标签，<a href="media/demo-1080p.mp4">点这里下载</a>。
+    </video>
+  </div>
+
+  <div class="meta">
+    <span>总时长 1:40.8</span>
+    <a href="media/demo-1080p.mp4" download>下载 1080p 横版（7.5 MB）</a>
+    <a href="media/demo-vertical-1080x1920.mp4" download>下载 9:16 竖版（7.6 MB）</a>
+    <a href="https://github.com/FSNH/dsh-plugin-knowledge-base">GitHub 仓库</a>
+    <a href="https://www.npmjs.com/package/@xiaofanzhao/dsh-plugin-knowledge-base">npm</a>
+  </div>
+
+  <h2>章节</h2>
+  <div class="list">
+      <button class="ch" data-t="0.0"><span class="idx">00</span><span class="name">封面</span><span class="desc">点击任一章可跳转播放</span><span class="t">0:00.0</span></button>
+      <button class="ch" data-t="5.63"><span class="idx">01</span><span class="name">知识库面板</span><span class="desc">多库、文件树、缩略图</span><span class="t">0:05.6</span></button>
+      <button class="ch" data-t="11.26"><span class="idx">02</span><span class="name">原版式阅读</span><span class="desc">看到的是排版本身，点哪页跳哪页</span><span class="t">0:11.3</span></button>
+      <button class="ch" data-t="17.35"><span class="idx">03</span><span class="name">Markdown 渲染</span><span class="desc">标题、列表、引用、表格都认得</span><span class="t">0:17.4</span></button>
+      <button class="ch" data-t="22.84"><span class="idx">04</span><span class="name">表格视图</span><span class="desc">宽表横滚，日期不被裁</span><span class="t">0:22.8</span></button>
+      <button class="ch" data-t="28.3"><span class="idx">05</span><span class="name">图片直接看</span><span class="desc">原图 + 大屏铺满</span><span class="t">0:28.3</span></button>
+      <button class="ch" data-t="33.43"><span class="idx">06</span><span class="name">数据看板</span><span class="desc">规模、类型分布、7 天检索趋势</span><span class="t">0:33.4</span></button>
+      <button class="ch" data-t="38.8"><span class="idx">07</span><span class="name">AI 问答</span><span class="desc">检索后带出处回答</span><span class="t">0:38.8</span></button>
+      <button class="ch" data-t="46.76"><span class="idx">08</span><span class="name">建学习主题</span><span class="desc">AI 读完文档给候选目标</span><span class="t">0:46.8</span></button>
+      <button class="ch" data-t="56.74"><span class="idx">09</span><span class="name">AI 实战对练</span><span class="desc">卡片上的四种入口</span><span class="t">0:56.7</span></button>
+      <button class="ch" data-t="64.84"><span class="idx">10</span><span class="name">答完就点评</span><span class="desc">逐题打分 + 差在哪</span><span class="t">1:04.8</span></button>
+      <button class="ch" data-t="71.79"><span class="idx">11</span><span class="name">对练记录</span><span class="desc">逐题回看 + 检验报告</span><span class="t">1:11.8</span></button>
+      <button class="ch" data-t="78.67"><span class="idx">12</span><span class="name">刷题</span><span class="desc">多选判分 + 干扰项解析</span><span class="t">1:18.7</span></button>
+      <button class="ch" data-t="87.06"><span class="idx">13</span><span class="name">题库</span><span class="desc">正确答案高亮 + 解析</span><span class="t">1:27.1</span></button>
+      <button class="ch" data-t="93.99"><span class="idx">14</span><span class="name">结尾</span><span class="desc">三步用起来</span><span class="t">1:34.0</span></button>
+  </div>
+
+  <footer>
+    数据保存在本机 <code>~/.dsh/kb</code>，不上传云端 · MIT ·
+    <a href="https://github.com/FSNH/dsh-plugin-knowledge-base">github.com/FSNH/dsh-plugin-knowledge-base</a>
+  </footer>
+</div>
+
+<script>
+  const v = document.getElementById('v');
+  const buttons = [...document.querySelectorAll('.ch')];
+  buttons.forEach(b => b.addEventListener('click', () => {
+    v.currentTime = parseFloat(b.dataset.t) + 0.1;
+    v.play();
+    v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }));
+  v.addEventListener('timeupdate', () => {
+    const t = v.currentTime;
+    let active = 0;
+    buttons.forEach((b, i) => { if (t + 0.15 >= parseFloat(b.dataset.t)) active = i; });
+    buttons.forEach((b, i) => b.classList.toggle('on', i === active));
+  });
+</script>
+</body>
+</html>
