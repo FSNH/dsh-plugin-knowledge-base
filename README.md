@@ -16,8 +16,17 @@
 
 <sub>示例界面：文件名为占位示例；真实界面跟随 DSH 主题与窗口宽度。</sub>
 
+### 演示视频
+
+[![功能演示视频](docs/media/demo-cover.png)](docs/media/demo-1080p.mp4)
+
+▶ **[看演示视频（1 分 41 秒，1080p）](docs/media/demo-1080p.mp4)** · [竖版 9:16](docs/media/demo-vertical-1080x1920.mp4)（视频号/抖音用）
+
+<sub>15 个片段：知识库面板 → 原版式阅读 → Markdown → 表格视图 → 图片 → 数据看板 → AI 问答（带出处）→ 建学习主题 → AI 实战对练 → 对练点评 → 对练记录 → 刷题 → 题库。全程用「演示库（示例数据）」录制，不含真实业务内容；看板里的文件明细已做马赛克。</sub>
+
 ## 目录
 
+- [演示视频](#演示视频)
 - [它解决什么问题](#它解决什么问题)
 - [三分钟上手](#三分钟上手)
 - [功能](#功能)
@@ -41,7 +50,7 @@
 
 ```powershell
 # 1. 装（桌面端把 web 换成 desktop）
-dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.3
 ```
 
 ```
@@ -71,7 +80,7 @@ dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
 ### 方式一：从 npm 装（推荐）
 
 ```powershell
-dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.3
 ```
 
 已发布在 npm：[`@xiaofanzhao/dsh-plugin-knowledge-base`](https://www.npmjs.com/package/@xiaofanzhao/dsh-plugin-knowledge-base)
@@ -79,7 +88,7 @@ dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
 一条命令就够：它会把包装进 profile、把包名写进 `dsh.profile.bundles`，profile 启动时再合并包内自带的 `cordis.patch.yml`。**不需要手改任何 profile 文件**。
 
 - 装哪个 profile 就把 `web` 换成你的（桌面端是 `desktop`）
-- 升级：把版本号换成新的（如 `@0.4.1`）再执行一次，详见 [升级与备份](#升级与备份)
+- 升级：把版本号换成新的（如 `@0.4.3`）再执行一次，详见 [升级与备份](#升级与备份)
 - 卸载：`dsh plugin --profile web remove @xiaofanzhao/dsh-plugin-knowledge-base`
 
 > 如果提示 `E404 / 找不到这个版本`，说明该版本还没发布到 npm，先用方式二。
@@ -115,7 +124,7 @@ plugin_manager install_bundle "C:\path\to\dsh-plugin-knowledge-base"
 Copy-Item "$env:USERPROFILE\.dsh\kb" "$env:USERPROFILE\.dsh\kb-backup-$(Get-Date -Format yyyyMMdd-HHmmss)" -Recurse
 
 # 2. 升级到指定版本
-dsh plugin --profile desktop add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
+dsh plugin --profile desktop add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.3
 ```
 
 两个容易踩的点：
@@ -141,8 +150,8 @@ dsh plugin --profile desktop add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
 ### 1. 本地打包自测（不需要发布）
 
 ```powershell
-npm pack                     # 产出 xiaofanzhao-dsh-plugin-knowledge-base-0.4.1.tgz（29 个文件，约 132 KB）
-dsh plugin --profile kbtest add .\xiaofanzhao-dsh-plugin-knowledge-base-0.4.1.tgz
+npm pack                     # 产出 xiaofanzhao-dsh-plugin-knowledge-base-0.4.3.tgz（29 个文件，约 132 KB）
+dsh plugin --profile kbtest add .\xiaofanzhao-dsh-plugin-knowledge-base-0.4.3.tgz
 ```
 
 装完打开 `~/.dsh/profiles/kbtest/package.json`，应该能看到包名被自动追加进 bundles：
@@ -164,7 +173,7 @@ npm publish --access public      # 作用域包（@xxx/yyy）必须带 --access 
 发布后任何人：
 
 ```powershell
-dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.1
+dsh plugin --profile web add @xiaofanzhao/dsh-plugin-knowledge-base@0.4.3
 ```
 
 ### 3. 自动发布（可选）
