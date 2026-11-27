@@ -18,11 +18,11 @@
 
 ### 演示视频
 
+▶ **[在线播放（网页版，带章节跳转）](https://fsnh.github.io/dsh-plugin-knowledge-base/)** · [下载 1080p 横版](docs/media/demo-1080p.mp4) · [下载 9:16 竖版](docs/media/demo-vertical-1080x1920.mp4)
+
 ![功能演示动图](docs/media/demo-preview.gif)
 
-▶ **[看完整演示（1 分 41 秒，1080p）](docs/media/demo-1080p.mp4)** · [竖版 9:16](docs/media/demo-vertical-1080x1920.mp4)（视频号/抖音用）
-
-<sub>GitHub 页面内不能直接播放 mp4，点链接会进入文件页，再点「Download raw file」下载后观看；上面的动图是 8 秒高光预览（知识库面板 → 原版式 → 表格 → AI 问答 → 对练点评 → 刷题）。</sub>
+<sub>上面的动图是 8 秒高光预览（知识库面板 → 原版式 → 表格 → AI 问答 → 对练点评 → 刷题）。完整版 1 分 41 秒，建议走「在线播放」，可按章节跳到想看的片段。</sub>
 
 <sub>完整视频 15 个片段：知识库面板 → 原版式阅读 → Markdown → 表格视图 → 图片 → 数据看板 → AI 问答（带出处）→ 建学习主题 → AI 实战对练 → 对练点评 → 对练记录 → 刷题 → 题库。全程用「演示库（示例数据）」录制，不含真实业务内容；看板里的文件明细已做马赛克。</sub>
 
